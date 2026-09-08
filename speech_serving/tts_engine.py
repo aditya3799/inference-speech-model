@@ -1,5 +1,5 @@
 """
-Phase 1: Streaming Neural Codec TTS Engine (Decoder-Only Paged Attention).
+Streaming Neural Codec TTS Engine (Decoder-Only Paged Attention).
 
 Implements autoregressive continuous batching for multi-codebook neural codec audio decoders
 (e.g., EnCodec / SNAC / Bark / Parler-TTS style codebook tokens per frame).

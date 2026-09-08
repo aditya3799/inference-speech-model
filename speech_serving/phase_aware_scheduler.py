@@ -109,6 +109,7 @@ class PhaseAwareSpeechScheduler:
         # Batch-level encoder KV cache reuse across decode steps
         self._cached_batch_key: Optional[Tuple[int, ...]] = None
         self._cached_batched_enc_kv: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None
+        self._cached_enc_mask: Optional[torch.Tensor] = None
 
     def submit(
         self,
@@ -346,6 +347,7 @@ class PhaseAwareSpeechScheduler:
                 else:
                     self.active_decode.append(req)
                     self._cached_batch_key = None  # Invalidate batch-level encoder cache on new admission
+                    self._cached_enc_mask = None
 
             except Exception as e:
                 logger.error(f"Error in ENCODE_PHASE for req {req.id}: {e}")
@@ -372,6 +374,7 @@ class PhaseAwareSpeechScheduler:
         head_dim = self.dual_cache.decoder_bm.head_dim
 
         dec_cache = DynamicCache()
+        self_attn_mask = None
         if batch_size == 1:
             req = self.active_decode[0]
             for l in range(num_dec_layers):
@@ -411,13 +414,25 @@ class PhaseAwareSpeechScheduler:
                     layer.is_initialized = True
                     dec_cache.layers.append(layer)
 
+                # Decoder self-attention padding mask (key len = max_dec_len + 1 past + current)
+                self_attn_mask = torch.ones(
+                    (batch_size, 1, 1, max_dec_len + 1),
+                    device=self.device,
+                    dtype=torch.bool,
+                )
+                for i, req in enumerate(self.active_decode):
+                    if req.decoder_seq_len < max_dec_len:
+                        self_attn_mask[i, 0, 0, req.decoder_seq_len:max_dec_len] = False
+
         # 4. Build batched encoder past KV cache list (with cross-step batch reuse)
+        enc_mask = None
         if batch_size == 1:
             enc_kv_layers = self.active_decode[0].cached_encoder_kv
         else:
             batch_key = tuple(req.id for req in self.active_decode)
             if self._cached_batch_key == batch_key and self._cached_batched_enc_kv is not None:
                 enc_kv_layers = self._cached_batched_enc_kv
+                enc_mask = self._cached_enc_mask
             else:
                 max_enc_len = max(req.encoder_seq_len for req in self.active_decode)
                 min_enc_len = min(req.encoder_seq_len for req in self.active_decode)
@@ -446,8 +461,20 @@ class PhaseAwareSpeechScheduler:
                             b_v[i, :, :req.encoder_seq_len, :] = cv[0]
                     enc_kv_layers.append((b_k, b_v))
 
+                if min_enc_len < max_enc_len:
+                    enc_mask = torch.zeros(
+                        (batch_size, 1, 1, max_enc_len),
+                        device=self.device,
+                        dtype=torch.bool,
+                    )
+                    for i, req in enumerate(self.active_decode):
+                        enc_mask[i, 0, 0, :req.encoder_seq_len] = True
+                else:
+                    enc_mask = None
+
                 self._cached_batch_key = batch_key
                 self._cached_batched_enc_kv = enc_kv_layers
+                self._cached_enc_mask = enc_mask
 
         # 5. Run single batched forward pass on GPU
         with torch.no_grad():
@@ -455,7 +482,9 @@ class PhaseAwareSpeechScheduler:
                 input_ids=token_in,
                 past_key_values=dec_cache,
                 encoder_past_kv_list=enc_kv_layers,
-                use_cache=True
+                attention_mask=self_attn_mask,
+                encoder_attention_mask=enc_mask,
+                use_cache=True,
             )
 
         # 6. Scatter new decoder token KV back to physical block table & update request working cache
@@ -494,6 +523,7 @@ class PhaseAwareSpeechScheduler:
 
         if len(still_active) != len(self.active_decode):
             self._cached_batch_key = None  # Invalidate batch cache when any request completes
+            self._cached_enc_mask = None
         self.active_decode = still_active
 
     def _complete_request(self, req: DualCacheRequest, status: RequestPhase):
@@ -523,6 +553,7 @@ class PhaseAwareSpeechScheduler:
             req.cached_encoder_kv = None
             self._cached_batch_key = None
             self._cached_batched_enc_kv = None
+            self._cached_enc_mask = None
             self.completed.append(req)
 
     def step(self) -> bool:

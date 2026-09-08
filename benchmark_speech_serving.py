@@ -90,6 +90,10 @@ class NaiveSpeechServer:
 def run_benchmark_suite(
     output_image: str = "speech_serving_benchmark.png",
     num_repeats: int = 3,
+    num_enc_layers: int = 6,
+    num_dec_layers: int = 6,
+    num_heads: int = 8,
+    hidden_dim: int = 512,
 ):
     import gc
     print("=" * 80)
@@ -100,13 +104,10 @@ def run_benchmark_suite(
     dtype = torch.float16 if device == "cuda" else torch.float32
 
     print(f"Device: {device} ({dtype}) | Repetitions per scenario: {num_repeats}")
+    print(f"Model Config: {num_enc_layers} enc layers, {num_dec_layers} dec layers, {num_heads} heads, hidden_dim={hidden_dim} (Whisper-Base scale)")
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    num_enc_layers = 4
-    num_dec_layers = 4
-    num_heads = 4
-    hidden_dim = 128
     mel_dim = 80
     vocab_size = 512
     block_size = 16
@@ -214,7 +215,7 @@ def run_benchmark_suite(
                 num_heads=num_heads,
                 head_dim=hidden_dim // num_heads,
                 block_size=block_size,
-                num_blocks=128,
+                num_blocks=256,
                 dtype=dtype,
                 device=device,
             )
@@ -223,7 +224,7 @@ def run_benchmark_suite(
                 num_kv_heads=num_heads,
                 head_dim=hidden_dim // num_heads,
                 block_size=block_size,
-                num_blocks=128,
+                num_blocks=256,
                 dtype=dtype,
                 device=device,
             )
@@ -396,5 +397,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Speech Serving Benchmark Suite")
     parser.add_argument("--repeats", type=int, default=3, help="Number of repetitions per scenario (default: 3)")
     parser.add_argument("--output", type=str, default="speech_serving_benchmark.png", help="Output plot path")
+    parser.add_argument("--num_encoder_layers", type=int, default=6, help="Number of encoder layers (default: 6)")
+    parser.add_argument("--num_decoder_layers", type=int, default=6, help="Number of decoder layers (default: 6)")
+    parser.add_argument("--num_heads", type=int, default=8, help="Number of attention heads (default: 8)")
+    parser.add_argument("--hidden_dim", type=int, default=512, help="Hidden dimension (default: 512)")
     args, _ = parser.parse_known_args()
-    run_benchmark_suite(output_image=args.output, num_repeats=args.repeats)
+    run_benchmark_suite(
+        output_image=args.output,
+        num_repeats=args.repeats,
+        num_enc_layers=args.num_encoder_layers,
+        num_dec_layers=args.num_decoder_layers,
+        num_heads=args.num_heads,
+        hidden_dim=args.hidden_dim,
+    )

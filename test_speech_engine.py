@@ -2,10 +2,11 @@
 Comprehensive Test Suite for Paged Dual-Cache Speech Serving Engine.
 
 Tests:
-1. Phase 1 — Streaming Multi-Codebook TTS Engine continuous batching and multi-codebook frame generation.
-2. Phase 2 — Encoder-Side Paged Attention & Audio Prefix Sharing hit rates.
-3. Phase 3 — Dual-Cache Cross-Attention & Phase-Aware Scheduler state transitions.
+1. Streaming Multi-Codebook TTS Engine continuous batching and multi-codebook frame generation.
+2. Encoder-Side Paged Attention & Audio Prefix Sharing hit rates.
+3. Dual-Cache Cross-Attention & Phase-Aware Scheduler state transitions.
 4. GPU Memory Safety — Explicit block release verification (zero memory leakage after request completion or failure).
+5. Cross-Attention Masking Correctness — Exact attention masking under mixed-length audio batching.
 """
 
 import sys
@@ -31,9 +32,9 @@ class TestSpeechServingEngine(unittest.TestCase):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.dtype = torch.float16 if self.device == "cuda" else torch.float32
 
-    def test_phase1_streaming_tts_engine(self):
-        """Test Phase 1 Streaming Multi-Codebook TTS Engine."""
-        print("\n--- Running Test Phase 1: Streaming Multi-Codebook TTS Engine ---")
+    def test_streaming_tts_engine(self):
+        """Test Streaming Multi-Codebook TTS Engine."""
+        print("\n--- Running Test: Streaming Multi-Codebook TTS Engine ---")
         num_layers = 2
         num_heads = 4
         hidden_dim = 64
@@ -87,11 +88,11 @@ class TestSpeechServingEngine(unittest.TestCase):
         # Verify all physical blocks were returned to free_block_list
         self.assertEqual(bm.allocated_block_count, 0)
         self.assertEqual(bm.num_free_blocks, 32)
-        print(">>> Phase 1 Test PASSED: Continuous batching & multi-codebook TTS streaming verified cleanly.")
+        print(">>> Streaming TTS Test PASSED: Continuous batching & multi-codebook TTS streaming verified cleanly.")
 
-    def test_phase2_encoder_paged_attention_and_prefix_sharing(self):
-        """Test Phase 2 Encoder Paged Attention Manager & Audio Prefix Sharing."""
-        print("\n--- Running Test Phase 2: Encoder Paged Attention & Prefix Sharing ---")
+    def test_encoder_paged_attention_and_prefix_sharing(self):
+        """Test Encoder Paged Attention Manager & Audio Prefix Sharing."""
+        print("\n--- Running Test: Encoder Paged Attention & Prefix Sharing ---")
         num_layers = 2
         num_heads = 4
         head_dim = 16
@@ -142,11 +143,11 @@ class TestSpeechServingEngine(unittest.TestCase):
         self.assertEqual(enc_bm.ref_counts[blk_1], 1)
         enc_bm.release_block(blk_2) # ref_count drops 1 -> 0 (freed!)
         self.assertEqual(enc_bm.allocated_block_count, 0)
-        print(">>> Phase 2 Test PASSED: Non-causal encoder paged attention & audio prefix sharing verified.")
+        print(">>> Encoder Paged Attention Test PASSED: Non-causal encoder paged attention & audio prefix sharing verified.")
 
-    def test_phase3_dual_cache_phase_aware_scheduler(self):
-        """Test Phase 3 Dual-Cache Manager & Phase-Aware Scheduler."""
-        print("\n--- Running Test Phase 3: Dual-Cache Phase-Aware Scheduler ---")
+    def test_dual_cache_phase_aware_scheduler(self):
+        """Test Dual-Cache Manager & Phase-Aware Scheduler."""
+        print("\n--- Running Test: Dual-Cache Phase-Aware Scheduler ---")
         num_enc_layers = 2
         num_dec_layers = 2
         num_heads = 4
@@ -216,7 +217,7 @@ class TestSpeechServingEngine(unittest.TestCase):
         # Confirm zero memory leak (all blocks freed in both pools)
         self.assertEqual(enc_bm.allocated_block_count, 0)
         self.assertEqual(dec_bm.allocated_block_count, 0)
-        print(">>> Phase 3 Test PASSED: Dual-Cache Phase-Aware Scheduler & Zero-Leak Memory Release verified.")
+        print(">>> Dual-Cache Scheduler Test PASSED: Phase-aware scheduling & zero-leak memory release verified.")
 
     def test_empty_pool_admission(self):
         """Regression Test: Verify single request admission into a completely empty pool is never rejected."""
@@ -232,6 +233,69 @@ class TestSpeechServingEngine(unittest.TestCase):
         req_id = scheduler.submit(mel, max_new_tokens=10)
         self.assertIsNotNone(req_id, "Request into completely empty pool should ALWAYS be admitted!")
         self.assertEqual(req_id, 0)
+
+    def test_variable_length_batch_cross_attention_correctness(self):
+        """Regression Test: Verify that mixed audio lengths in a concurrent batch do not suffer cross-attention padding leakage."""
+        print("\n--- Running Regression Test: Variable-Length Batch Cross-Attention Correctness ---")
+        torch.manual_seed(999)
+        num_enc_layers = 2
+        num_dec_layers = 2
+        num_heads = 4
+        hidden_dim = 64
+        mel_dim = 80
+        vocab_size = 256
+        block_size = 8
+        max_new_tokens = 20
+
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=num_enc_layers,
+            num_decoder_layers=num_dec_layers,
+            num_heads=num_heads,
+            hidden_dim=hidden_dim,
+            mel_dim=mel_dim,
+            vocab_size=vocab_size,
+        ).to(device=self.device, dtype=self.dtype)
+        model.eval()
+
+        # Varied mix of audio lengths: [40, 100, 160, 200] in a single batch of 4
+        audio_lengths = [40, 100, 160, 200]
+        test_mels = [torch.randn(mel_dim, l, device=self.device, dtype=self.dtype) for l in audio_lengths]
+
+        # 1. Compute ground-truth sequential HF decode per request
+        reference_tokens = []
+        for mel in test_mels:
+            mel_in = mel.unsqueeze(0)
+            with torch.no_grad():
+                _, enc_kv = model.encode(mel_in)
+            tok = torch.tensor([[1]], device=self.device, dtype=torch.long)
+            kv = None
+            gen = []
+            for _ in range(max_new_tokens):
+                with torch.no_grad():
+                    out = model.decode_step(tok, kv, enc_kv, use_cache=True)
+                kv = out.past_key_values
+                t = torch.argmax(out.logits[:, -1, :], dim=-1).item()
+                tok = torch.tensor([[t]], device=self.device, dtype=torch.long)
+                gen.append(t)
+            reference_tokens.append(gen)
+
+        # 2. Run paged engine with batch_size=4
+        enc_bm = EncoderBlockManager(num_layers=num_enc_layers, num_heads=num_heads, head_dim=hidden_dim // num_heads, block_size=block_size, num_blocks=128, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(num_layers=num_dec_layers, num_kv_heads=num_heads, head_dim=hidden_dim // num_heads, block_size=block_size, num_blocks=128, dtype=self.dtype, device=self.device)
+        dual = DualCacheManager(enc_bm, dec_bm)
+        scheduler = PhaseAwareSpeechScheduler(model=model, dual_cache_manager=dual, memory_guard=MemoryGuard(), max_batch_size=4, device=self.device)
+
+        for mel in test_mels:
+            scheduler.submit(mel, max_new_tokens=max_new_tokens)
+
+        completed = scheduler.run_until_done()
+        completed.sort(key=lambda r: r.id)
+        paged_tokens = [r.generated_tokens for r in completed]
+
+        for i, (ref, paged) in enumerate(zip(reference_tokens, paged_tokens)):
+            self.assertEqual(ref, paged, f"Request #{i} (mel_len={audio_lengths[i]}) output diverged from reference under variable-length batching!")
+
+        print(f">>> Variable-Length Batch Test PASSED: All {len(audio_lengths)} heterogeneous requests match reference token-for-token!")
 
 
 if __name__ == "__main__":

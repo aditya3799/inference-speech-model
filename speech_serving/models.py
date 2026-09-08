@@ -107,12 +107,14 @@ class DecoderLayer(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_past_kv: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         attention_mask: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         """
         Forward pass with self-attention and cross-attention.
         """
         batch_size, seq_len, _ = x.shape
         residual = x
+        min_val = torch.finfo(x.dtype).min
 
         # 1. Self Attention
         q = self.self_attn_q(self.norm1(x)).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -131,7 +133,10 @@ class DecoderLayer(nn.Module):
         scale = 1.0 / math.sqrt(self.head_dim)
         attn_weights = torch.matmul(q, k.transpose(-2, -1)) * scale
         if attention_mask is not None:
-            attn_weights = attn_weights + attention_mask.to(dtype=q.dtype)
+            if attention_mask.dtype == torch.bool:
+                attn_weights = attn_weights.masked_fill(~attention_mask, min_val)
+            else:
+                attn_weights = attn_weights + attention_mask.to(dtype=q.dtype)
         elif self.is_decoder and seq_len > 1:
             causal_mask = torch.triu(torch.full((seq_len, k.shape[2]), float("-inf"), device=x.device, dtype=q.dtype), diagonal=1)
             attn_weights = attn_weights + causal_mask
@@ -158,6 +163,22 @@ class DecoderLayer(nn.Module):
 
             new_cross_kv = (ck, cv)
             cross_weights = torch.matmul(cq, ck.transpose(-2, -1)) * scale
+
+            if encoder_attention_mask is not None:
+                assert encoder_attention_mask.dim() == 4, (
+                    f"Expected 4D encoder_attention_mask [batch, heads, q_len, enc_len], got {encoder_attention_mask.shape}"
+                )
+                assert encoder_attention_mask.shape[0] == cross_weights.shape[0], (
+                    f"Batch size mismatch: mask {encoder_attention_mask.shape[0]} vs cross_weights {cross_weights.shape[0]}"
+                )
+                assert encoder_attention_mask.shape[-1] == cross_weights.shape[-1], (
+                    f"Encoder length mismatch: mask {encoder_attention_mask.shape[-1]} vs cross_weights {cross_weights.shape[-1]}"
+                )
+                if encoder_attention_mask.dtype == torch.bool:
+                    cross_weights = cross_weights.masked_fill(~encoder_attention_mask, min_val)
+                else:
+                    cross_weights = cross_weights + encoder_attention_mask.to(dtype=cq.dtype)
+
             cross_probs = F.softmax(cross_weights, dim=-1)
             cross_attn_out = torch.matmul(cross_probs, cv).transpose(1, 2).reshape(batch_size, seq_len, -1)
             x = residual + self.cross_attn_out(cross_attn_out)
@@ -170,7 +191,7 @@ class DecoderLayer(nn.Module):
 
 class StreamingMultiCodebookTTSModel(nn.Module):
     """
-    Phase 1: Neural-Codec-based TTS Model (Decoder-only autoregressive over K codebooks).
+    Neural-Codec-based TTS Model (Decoder-only autoregressive over K codebooks).
     Exposes HuggingFace-compatible config interface for seamless BlockManager initialization.
     """
 
@@ -257,7 +278,7 @@ class StreamingMultiCodebookTTSModel(nn.Module):
 
 class WhisperClassSpeechEncoderDecoderModel(nn.Module):
     """
-    Phase 2 & 3: Speech Encoder-Decoder Architecture (Whisper-class ASR model).
+    Speech Encoder-Decoder Architecture (Whisper-class ASR model).
     Encodes audio features (mel frames) non-causally, then decodes text tokens causally with cross-attention.
     """
 
@@ -332,6 +353,8 @@ class WhisperClassSpeechEncoderDecoderModel(nn.Module):
         past_key_values: Optional[Any] = None,
         encoder_past_kv_list: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None,
         encoder_hidden_states: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
         use_cache: bool = True,
     ) -> Any:
         """
@@ -357,6 +380,8 @@ class WhisperClassSpeechEncoderDecoderModel(nn.Module):
                 past_key_values=past_kv,
                 encoder_hidden_states=encoder_hidden_states if enc_kv is None else None,
                 encoder_past_kv=enc_kv,
+                attention_mask=attention_mask,
+                encoder_attention_mask=encoder_attention_mask,
             )
 
             if use_cache:
