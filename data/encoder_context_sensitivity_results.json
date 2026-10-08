@@ -1,0 +1,1221 @@
+{
+  "model_id": "openai/whisper-base",
+  "device": "cuda",
+  "calibration": {
+    "sample_id": "5683-32865-0003",
+    "duration_sec": 3.51,
+    "determinism_fp32": {
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "relative_l2_error": 0.0,
+      "cosine_similarity": 1.0
+    },
+    "batch_position_0": {
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "relative_l2_error": 0.0,
+      "cosine_similarity": 1.0
+    },
+    "batch_position_1": {
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "relative_l2_error": 0.0,
+      "cosine_similarity": 1.0
+    },
+    "fp16_vs_fp32": {
+      "max_abs_diff": 0.6305127143859863,
+      "mean_abs_diff": 0.0013156032655388117,
+      "relative_l2_error": 0.0020536442420030923,
+      "cosine_similarity": 0.9999979138374329
+    },
+    "noise_floor_relative_l2": 0.0020536442420030923,
+    "noise_floor_max_abs": 0.6305127143859863
+  },
+  "experiment_e1_trailing_context": [
+    {
+      "pair_idx": 0,
+      "utterance_a_id": "5683-32865-0003",
+      "utterance_b_id": "7021-85628-0017",
+      "duration_a": 3.51,
+      "duration_b": 2.155,
+      "n_enc_positions": 175,
+      "final_layer_metrics": {
+        "max_abs_diff": 15.0341796875,
+        "mean_abs_diff": 0.18819352984428406,
+        "relative_l2_error": 0.2342344084343993,
+        "cosine_similarity": 0.9736158847808838
+      },
+      "per_layer_metrics": [
+        {
+          "max_abs_diff": 0.2451171875,
+          "mean_abs_diff": 0.0054397545754909515,
+          "relative_l2_error": 0.018871999810726417,
+          "cosine_similarity": 0.9998221397399902,
+          "layer": 0
+        },
+        {
+          "max_abs_diff": 0.2984619140625,
+          "mean_abs_diff": 0.02449594810605049,
+          "relative_l2_error": 0.05486807414633045,
+          "cosine_similarity": 0.9984984397888184,
+          "layer": 1
+        },
+        {
+          "max_abs_diff": 0.6806640625,
+          "mean_abs_diff": 0.03312348574399948,
+          "relative_l2_error": 0.07491126119352594,
+          "cosine_similarity": 0.9971910715103149,
+          "layer": 2
+        },
+        {
+          "max_abs_diff": 0.9677734375,
+          "mean_abs_diff": 0.049602530896663666,
+          "relative_l2_error": 0.11373871671082471,
+          "cosine_similarity": 0.993510901927948,
+          "layer": 3
+        },
+        {
+          "max_abs_diff": 6.732421875,
+          "mean_abs_diff": 0.07849917560815811,
+          "relative_l2_error": 0.15928126237256493,
+          "cosine_similarity": 0.9872844219207764,
+          "layer": 4
+        },
+        {
+          "max_abs_diff": 72.890625,
+          "mean_abs_diff": 0.1381520926952362,
+          "relative_l2_error": 0.3448454326732173,
+          "cosine_similarity": 0.9434716701507568,
+          "layer": 5
+        },
+        {
+          "max_abs_diff": 15.0341796875,
+          "mean_abs_diff": 0.18819352984428406,
+          "relative_l2_error": 0.2342344084343993,
+          "cosine_similarity": 0.9736158847808838,
+          "layer": 6
+        }
+      ]
+    },
+    {
+      "pair_idx": 1,
+      "utterance_a_id": "3575-170457-0027",
+      "utterance_b_id": "1089-134686-0035",
+      "duration_a": 4.58,
+      "duration_b": 3.445,
+      "n_enc_positions": 229,
+      "final_layer_metrics": {
+        "max_abs_diff": 14.66015625,
+        "mean_abs_diff": 0.15553894639015198,
+        "relative_l2_error": 0.21622127145952016,
+        "cosine_similarity": 0.9772831201553345
+      },
+      "per_layer_metrics": [
+        {
+          "max_abs_diff": 0.220703125,
+          "mean_abs_diff": 0.0020365959499031305,
+          "relative_l2_error": 0.010254943601123593,
+          "cosine_similarity": 0.9999475479125977,
+          "layer": 0
+        },
+        {
+          "max_abs_diff": 0.509033203125,
+          "mean_abs_diff": 0.022605251520872116,
+          "relative_l2_error": 0.0532211668953329,
+          "cosine_similarity": 0.9985856413841248,
+          "layer": 1
+        },
+        {
+          "max_abs_diff": 0.6787109375,
+          "mean_abs_diff": 0.030911969020962715,
+          "relative_l2_error": 0.07339263358276753,
+          "cosine_similarity": 0.9973032474517822,
+          "layer": 2
+        },
+        {
+          "max_abs_diff": 2.0390625,
+          "mean_abs_diff": 0.04105454683303833,
+          "relative_l2_error": 0.100944989970412,
+          "cosine_similarity": 0.9948930740356445,
+          "layer": 3
+        },
+        {
+          "max_abs_diff": 36.5,
+          "mean_abs_diff": 0.06725353002548218,
+          "relative_l2_error": 0.10762477421584621,
+          "cosine_similarity": 0.9965656399726868,
+          "layer": 4
+        },
+        {
+          "max_abs_diff": 48.87109375,
+          "mean_abs_diff": 0.13208457827568054,
+          "relative_l2_error": 0.19412806088475176,
+          "cosine_similarity": 0.9839606881141663,
+          "layer": 5
+        },
+        {
+          "max_abs_diff": 14.66015625,
+          "mean_abs_diff": 0.15553894639015198,
+          "relative_l2_error": 0.21622127145952016,
+          "cosine_similarity": 0.9772831201553345,
+          "layer": 6
+        }
+      ]
+    },
+    {
+      "pair_idx": 2,
+      "utterance_a_id": "672-122797-0028",
+      "utterance_b_id": "1320-122617-0041",
+      "duration_a": 2.61,
+      "duration_b": 4.15,
+      "n_enc_positions": 130,
+      "final_layer_metrics": {
+        "max_abs_diff": 15.113037109375,
+        "mean_abs_diff": 0.245174378156662,
+        "relative_l2_error": 0.2883934642247168,
+        "cosine_similarity": 0.9600175023078918
+      },
+      "per_layer_metrics": [
+        {
+          "max_abs_diff": 0.0625,
+          "mean_abs_diff": 0.00019629529560916126,
+          "relative_l2_error": 0.0013676989532750365,
+          "cosine_similarity": 0.9999991655349731,
+          "layer": 0
+        },
+        {
+          "max_abs_diff": 0.672119140625,
+          "mean_abs_diff": 0.04008854925632477,
+          "relative_l2_error": 0.08791827301452365,
+          "cosine_similarity": 0.9961336851119995,
+          "layer": 1
+        },
+        {
+          "max_abs_diff": 1.0576171875,
+          "mean_abs_diff": 0.05471991002559662,
+          "relative_l2_error": 0.11562619833334725,
+          "cosine_similarity": 0.9932938814163208,
+          "layer": 2
+        },
+        {
+          "max_abs_diff": 2.951171875,
+          "mean_abs_diff": 0.07166746258735657,
+          "relative_l2_error": 0.15337893911233774,
+          "cosine_similarity": 0.9882249236106873,
+          "layer": 3
+        },
+        {
+          "max_abs_diff": 149.46875,
+          "mean_abs_diff": 0.13743852078914642,
+          "relative_l2_error": 0.9773531991556602,
+          "cosine_similarity": 0.7428251504898071,
+          "layer": 4
+        },
+        {
+          "max_abs_diff": 132.125,
+          "mean_abs_diff": 0.21886420249938965,
+          "relative_l2_error": 0.6332627572598206,
+          "cosine_similarity": 0.8322755098342896,
+          "layer": 5
+        },
+        {
+          "max_abs_diff": 15.113037109375,
+          "mean_abs_diff": 0.245174378156662,
+          "relative_l2_error": 0.2883934642247168,
+          "cosine_similarity": 0.9600175023078918,
+          "layer": 6
+        }
+      ]
+    },
+    {
+      "pair_idx": 3,
+      "utterance_a_id": "2830-3979-0012",
+      "utterance_b_id": "5142-33396-0048",
+      "duration_a": 3.625,
+      "duration_b": 3.96,
+      "n_enc_positions": 181,
+      "final_layer_metrics": {
+        "max_abs_diff": 13.984375,
+        "mean_abs_diff": 0.18739859759807587,
+        "relative_l2_error": 0.25774875674551545,
+        "cosine_similarity": 0.9677864909172058
+      },
+      "per_layer_metrics": [
+        {
+          "max_abs_diff": 0.185455322265625,
+          "mean_abs_diff": 7.117206405382603e-05,
+          "relative_l2_error": 0.002332352453460283,
+          "cosine_similarity": 0.9999973773956299,
+          "layer": 0
+        },
+        {
+          "max_abs_diff": 0.43212890625,
+          "mean_abs_diff": 0.0301237590610981,
+          "relative_l2_error": 0.06894308441667919,
+          "cosine_similarity": 0.9976246356964111,
+          "layer": 1
+        },
+        {
+          "max_abs_diff": 0.75390625,
+          "mean_abs_diff": 0.04096187278628349,
+          "relative_l2_error": 0.09091315844787835,
+          "cosine_similarity": 0.9958673715591431,
+          "layer": 2
+        },
+        {
+          "max_abs_diff": 4.67578125,
+          "mean_abs_diff": 0.04907268285751343,
+          "relative_l2_error": 0.12105305683809696,
+          "cosine_similarity": 0.9926509857177734,
+          "layer": 3
+        },
+        {
+          "max_abs_diff": 244.5625,
+          "mean_abs_diff": 0.09585460275411606,
+          "relative_l2_error": 0.9548786238073231,
+          "cosine_similarity": 0.8585020899772644,
+          "layer": 4
+        },
+        {
+          "max_abs_diff": 241.125,
+          "mean_abs_diff": 0.16634798049926758,
+          "relative_l2_error": 0.6789707136034787,
+          "cosine_similarity": 0.8745687007904053,
+          "layer": 5
+        },
+        {
+          "max_abs_diff": 13.984375,
+          "mean_abs_diff": 0.18739859759807587,
+          "relative_l2_error": 0.25774875674551545,
+          "cosine_similarity": 0.9677864909172058,
+          "layer": 6
+        }
+      ]
+    },
+    {
+      "pair_idx": 4,
+      "utterance_a_id": "121-127105-0011",
+      "utterance_b_id": "908-157963-0018",
+      "duration_a": 5.78,
+      "duration_b": 4.255,
+      "n_enc_positions": 289,
+      "final_layer_metrics": {
+        "max_abs_diff": 14.83447265625,
+        "mean_abs_diff": 0.1372079849243164,
+        "relative_l2_error": 0.17344829627051606,
+        "cosine_similarity": 0.9853022694587708
+      },
+      "per_layer_metrics": [
+        {
+          "max_abs_diff": 0.7423095703125,
+          "mean_abs_diff": 0.005337357055395842,
+          "relative_l2_error": 0.026012958484897,
+          "cosine_similarity": 0.9996619820594788,
+          "layer": 0
+        },
+        {
+          "max_abs_diff": 0.684326171875,
+          "mean_abs_diff": 0.024906346574425697,
+          "relative_l2_error": 0.06303857339045853,
+          "cosine_similarity": 0.9980143904685974,
+          "layer": 1
+        },
+        {
+          "max_abs_diff": 0.9501953125,
+          "mean_abs_diff": 0.03670099750161171,
+          "relative_l2_error": 0.08613271713605242,
+          "cosine_similarity": 0.9962852001190186,
+          "layer": 2
+        },
+        {
+          "max_abs_diff": 7.765625,
+          "mean_abs_diff": 0.04617412015795708,
+          "relative_l2_error": 0.1284598608303504,
+          "cosine_similarity": 0.9917391538619995,
+          "layer": 3
+        },
+        {
+          "max_abs_diff": 337.078125,
+          "mean_abs_diff": 0.08239948004484177,
+          "relative_l2_error": 1.2101300508490411,
+          "cosine_similarity": 0.6442177891731262,
+          "layer": 4
+        },
+        {
+          "max_abs_diff": 324.3125,
+          "mean_abs_diff": 0.12437546253204346,
+          "relative_l2_error": 0.7663083732157362,
+          "cosine_similarity": 0.7982593774795532,
+          "layer": 5
+        },
+        {
+          "max_abs_diff": 14.83447265625,
+          "mean_abs_diff": 0.1372079849243164,
+          "relative_l2_error": 0.17344829627051606,
+          "cosine_similarity": 0.9853022694587708,
+          "layer": 6
+        }
+      ]
+    }
+  ],
+  "downstream_e1_transcription": [
+    {
+      "pair_idx": 0,
+      "utterance_a_id": "5683-32865-0003",
+      "baseline_tokens": [
+        814,
+        366,
+        29246,
+        11,
+        291,
+        458,
+        13,
+        492,
+        366,
+        439,
+        29246,
+        13
+      ],
+      "baseline_text": " They are cousins, you know. We are all cousins.",
+      "baseline_normalized": " they are cousins you know we are all cousins ",
+      "baseline_wer": 0.0,
+      "spliced_tokens": [
+        814,
+        366,
+        29246,
+        11,
+        291,
+        458,
+        13,
+        492,
+        366,
+        439,
+        29246,
+        13
+      ],
+      "spliced_text": " They are cousins, you know. We are all cousins.",
+      "spliced_normalized": " they are cousins you know we are all cousins ",
+      "spliced_wer": 0.0,
+      "exact_match": true,
+      "first_divergence_idx": null,
+      "wer_delta": 0.0
+    },
+    {
+      "pair_idx": 1,
+      "utterance_a_id": "3575-170457-0027",
+      "baseline_tokens": [
+        286,
+        2644,
+        15744,
+        2059,
+        264,
+        10158,
+        3774,
+        295,
+        46567,
+        370,
+        613,
+        16972,
+        13
+      ],
+      "baseline_text": " I cannot deny myself the gratification of inserting so these reply.",
+      "baseline_normalized": " i cannot deny myself the gratification of inserting so these reply ",
+      "baseline_wer": 0.18181818181818182,
+      "spliced_tokens": [
+        286,
+        2644,
+        15744,
+        2059,
+        264,
+        10158,
+        3774,
+        295,
+        46567,
+        370,
+        613,
+        16972,
+        13
+      ],
+      "spliced_text": " I cannot deny myself the gratification of inserting so these reply.",
+      "spliced_normalized": " i cannot deny myself the gratification of inserting so these reply ",
+      "spliced_wer": 0.18181818181818182,
+      "exact_match": true,
+      "first_divergence_idx": null,
+      "wer_delta": 0.0
+    },
+    {
+      "pair_idx": 2,
+      "utterance_a_id": "672-122797-0028",
+      "baseline_tokens": [
+        639,
+        5634,
+        436,
+        439,
+        848,
+        13
+      ],
+      "baseline_text": " This evening they all said.",
+      "baseline_normalized": " this evening they all said ",
+      "baseline_wer": 0.0,
+      "spliced_tokens": [
+        639,
+        5634,
+        11,
+        436,
+        439,
+        848,
+        13
+      ],
+      "spliced_text": " This evening, they all said.",
+      "spliced_normalized": " this evening they all said ",
+      "spliced_wer": 0.0,
+      "exact_match": false,
+      "first_divergence_idx": 2,
+      "wer_delta": 0.0
+    },
+    {
+      "pair_idx": 3,
+      "utterance_a_id": "2830-3979-0012",
+      "baseline_tokens": [
+        440,
+        8725,
+        295,
+        527,
+        1265,
+        4393,
+        1463,
+        5680,
+        13
+      ],
+      "baseline_text": " The Word of our God shall stand forever.",
+      "baseline_normalized": " the word of our god shall stand forever ",
+      "baseline_wer": 0.0,
+      "spliced_tokens": [
+        440,
+        8725,
+        295,
+        527,
+        1265,
+        4393,
+        1463,
+        5680,
+        13
+      ],
+      "spliced_text": " The Word of our God shall stand forever.",
+      "spliced_normalized": " the word of our god shall stand forever ",
+      "spliced_wer": 0.0,
+      "exact_match": true,
+      "first_divergence_idx": null,
+      "wer_delta": 0.0
+    },
+    {
+      "pair_idx": 4,
+      "utterance_a_id": "121-127105-0011",
+      "baseline_tokens": [
+        1240,
+        390,
+        264,
+        881,
+        3986,
+        712,
+        3059,
+        286,
+        600,
+        1562,
+        2570,
+        294,
+        720,
+        2535,
+        13,
+        1240,
+        576,
+        362,
+        668,
+        14829,
+        295,
+        604,
+        2035,
+        13
+      ],
+      "baseline_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+      "baseline_normalized": " she was the most agreeable woman i ve ever known in her position she would have been worthy of any whatever ",
+      "baseline_wer": 0.0,
+      "spliced_tokens": [
+        1240,
+        390,
+        264,
+        881,
+        3986,
+        712,
+        3059,
+        286,
+        600,
+        1562,
+        2570,
+        294,
+        720,
+        2535,
+        13,
+        1240,
+        576,
+        362,
+        668,
+        14829,
+        295,
+        604,
+        2035,
+        13
+      ],
+      "spliced_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+      "spliced_normalized": " she was the most agreeable woman i ve ever known in her position she would have been worthy of any whatever ",
+      "spliced_wer": 0.0,
+      "exact_match": true,
+      "first_divergence_idx": null,
+      "wer_delta": 0.0
+    }
+  ],
+  "experiment_e2_offset_shift": [
+    {
+      "pair_idx": 0,
+      "utterance_a_id": "5683-32865-0003",
+      "duration_a": 3.51,
+      "n_enc_positions": 175,
+      "shifts": [
+        {
+          "max_abs_diff": 17.85546875,
+          "mean_abs_diff": 0.2825630009174347,
+          "relative_l2_error": 0.6728358724937517,
+          "cosine_similarity": 0.7740828990936279,
+          "offset_sec": 2.0,
+          "start_enc_pos": 100
+        },
+        {
+          "max_abs_diff": 20.375,
+          "mean_abs_diff": 0.31461378931999207,
+          "relative_l2_error": 0.7868356241991289,
+          "cosine_similarity": 0.6877292394638062,
+          "offset_sec": 5.0,
+          "start_enc_pos": 250
+        },
+        {
+          "max_abs_diff": 22.0859375,
+          "mean_abs_diff": 0.4062979817390442,
+          "relative_l2_error": 0.9856567008236545,
+          "cosine_similarity": 0.5106581449508667,
+          "offset_sec": 10.0,
+          "start_enc_pos": 500
+        }
+      ]
+    },
+    {
+      "pair_idx": 1,
+      "utterance_a_id": "3575-170457-0027",
+      "duration_a": 4.58,
+      "n_enc_positions": 229,
+      "shifts": [
+        {
+          "max_abs_diff": 19.59375,
+          "mean_abs_diff": 0.2788248360157013,
+          "relative_l2_error": 0.6968890269182253,
+          "cosine_similarity": 0.7574419975280762,
+          "offset_sec": 2.0,
+          "start_enc_pos": 100
+        },
+        {
+          "max_abs_diff": 21.84375,
+          "mean_abs_diff": 0.31098711490631104,
+          "relative_l2_error": 0.8078675417013504,
+          "cosine_similarity": 0.6724734306335449,
+          "offset_sec": 5.0,
+          "start_enc_pos": 250
+        },
+        {
+          "max_abs_diff": 21.640625,
+          "mean_abs_diff": 0.4081239700317383,
+          "relative_l2_error": 0.9957969350621992,
+          "cosine_similarity": 0.5035801529884338,
+          "offset_sec": 10.0,
+          "start_enc_pos": 500
+        }
+      ]
+    },
+    {
+      "pair_idx": 2,
+      "utterance_a_id": "672-122797-0028",
+      "duration_a": 2.61,
+      "n_enc_positions": 130,
+      "shifts": [
+        {
+          "max_abs_diff": 17.61328125,
+          "mean_abs_diff": 0.3086094856262207,
+          "relative_l2_error": 0.6574843927128512,
+          "cosine_similarity": 0.7836349606513977,
+          "offset_sec": 2.0,
+          "start_enc_pos": 100
+        },
+        {
+          "max_abs_diff": 19.5390625,
+          "mean_abs_diff": 0.3399702310562134,
+          "relative_l2_error": 0.7562771014886344,
+          "cosine_similarity": 0.7123241424560547,
+          "offset_sec": 5.0,
+          "start_enc_pos": 250
+        },
+        {
+          "max_abs_diff": 20.9296875,
+          "mean_abs_diff": 0.42263540625572205,
+          "relative_l2_error": 0.9614953590408124,
+          "cosine_similarity": 0.5330249667167664,
+          "offset_sec": 10.0,
+          "start_enc_pos": 500
+        }
+      ]
+    },
+    {
+      "pair_idx": 3,
+      "utterance_a_id": "2830-3979-0012",
+      "duration_a": 3.625,
+      "n_enc_positions": 181,
+      "shifts": [
+        {
+          "max_abs_diff": 18.6484375,
+          "mean_abs_diff": 0.2944284677505493,
+          "relative_l2_error": 0.6672860617246384,
+          "cosine_similarity": 0.7767370939254761,
+          "offset_sec": 2.0,
+          "start_enc_pos": 100
+        },
+        {
+          "max_abs_diff": 20.15625,
+          "mean_abs_diff": 0.3216961622238159,
+          "relative_l2_error": 0.7739695518580969,
+          "cosine_similarity": 0.6981422305107117,
+          "offset_sec": 5.0,
+          "start_enc_pos": 250
+        },
+        {
+          "max_abs_diff": 21.5234375,
+          "mean_abs_diff": 0.41379794478416443,
+          "relative_l2_error": 0.9734663167754221,
+          "cosine_similarity": 0.5233772397041321,
+          "offset_sec": 10.0,
+          "start_enc_pos": 500
+        }
+      ]
+    },
+    {
+      "pair_idx": 4,
+      "utterance_a_id": "121-127105-0011",
+      "duration_a": 5.78,
+      "n_enc_positions": 289,
+      "shifts": [
+        {
+          "max_abs_diff": 20.828125,
+          "mean_abs_diff": 0.2683824598789215,
+          "relative_l2_error": 0.7020514642691142,
+          "cosine_similarity": 0.7534253001213074,
+          "offset_sec": 2.0,
+          "start_enc_pos": 100
+        },
+        {
+          "max_abs_diff": 23.2734375,
+          "mean_abs_diff": 0.30617251992225647,
+          "relative_l2_error": 0.8299051697740237,
+          "cosine_similarity": 0.6541755795478821,
+          "offset_sec": 5.0,
+          "start_enc_pos": 250
+        },
+        {
+          "max_abs_diff": 22.78125,
+          "mean_abs_diff": 0.39332011342048645,
+          "relative_l2_error": 0.981553166735414,
+          "cosine_similarity": 0.5164757966995239,
+          "offset_sec": 10.0,
+          "start_enc_pos": 500
+        }
+      ]
+    }
+  ],
+  "downstream_e2_transcription": [
+    {
+      "pair_idx": 0,
+      "utterance_a_id": "5683-32865-0003",
+      "baseline_tokens": [
+        814,
+        366,
+        29246,
+        11,
+        291,
+        458,
+        13,
+        492,
+        366,
+        439,
+        29246,
+        13
+      ],
+      "baseline_text": " They are cousins, you know. We are all cousins.",
+      "shifts": [
+        {
+          "offset_sec": 2.0,
+          "spliced_tokens": [
+            814,
+            366,
+            29246,
+            11,
+            291,
+            458,
+            13,
+            492,
+            366,
+            439,
+            29246,
+            13
+          ],
+          "spliced_text": " They are cousins, you know. We are all cousins.",
+          "spliced_normalized": " they are cousins you know we are all cousins ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 5.0,
+          "spliced_tokens": [
+            814,
+            366,
+            29246,
+            11,
+            291,
+            458,
+            13,
+            492,
+            366,
+            439,
+            29246,
+            13
+          ],
+          "spliced_text": " They are cousins, you know. We are all cousins.",
+          "spliced_normalized": " they are cousins you know we are all cousins ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 10.0,
+          "spliced_tokens": [
+            814,
+            366,
+            29246,
+            11,
+            291,
+            458,
+            13,
+            492,
+            366,
+            439,
+            29246,
+            13
+          ],
+          "spliced_text": " They are cousins, you know. We are all cousins.",
+          "spliced_normalized": " they are cousins you know we are all cousins ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        }
+      ]
+    },
+    {
+      "pair_idx": 1,
+      "utterance_a_id": "3575-170457-0027",
+      "baseline_tokens": [
+        286,
+        2644,
+        15744,
+        2059,
+        264,
+        10158,
+        3774,
+        295,
+        46567,
+        370,
+        613,
+        16972,
+        13
+      ],
+      "baseline_text": " I cannot deny myself the gratification of inserting so these reply.",
+      "shifts": [
+        {
+          "offset_sec": 2.0,
+          "spliced_tokens": [
+            286,
+            2644,
+            15744,
+            2059,
+            264,
+            10158,
+            3774,
+            295,
+            46567,
+            370,
+            613,
+            16972,
+            13
+          ],
+          "spliced_text": " I cannot deny myself the gratification of inserting so these reply.",
+          "spliced_normalized": " i cannot deny myself the gratification of inserting so these reply ",
+          "spliced_wer": 0.18181818181818182,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 5.0,
+          "spliced_tokens": [
+            286,
+            2644,
+            15744,
+            2059,
+            264,
+            10158,
+            3774,
+            295,
+            46567,
+            370,
+            613,
+            16972,
+            13
+          ],
+          "spliced_text": " I cannot deny myself the gratification of inserting so these reply.",
+          "spliced_normalized": " i cannot deny myself the gratification of inserting so these reply ",
+          "spliced_wer": 0.18181818181818182,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 10.0,
+          "spliced_tokens": [
+            286,
+            2644,
+            15744,
+            2059,
+            264,
+            10158,
+            3774,
+            295,
+            46567,
+            370,
+            613,
+            16972,
+            13
+          ],
+          "spliced_text": " I cannot deny myself the gratification of inserting so these reply.",
+          "spliced_normalized": " i cannot deny myself the gratification of inserting so these reply ",
+          "spliced_wer": 0.18181818181818182,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        }
+      ]
+    },
+    {
+      "pair_idx": 2,
+      "utterance_a_id": "672-122797-0028",
+      "baseline_tokens": [
+        639,
+        5634,
+        436,
+        439,
+        848,
+        13
+      ],
+      "baseline_text": " This evening they all said.",
+      "shifts": [
+        {
+          "offset_sec": 2.0,
+          "spliced_tokens": [
+            639,
+            5634,
+            436,
+            439,
+            848,
+            13
+          ],
+          "spliced_text": " This evening they all said.",
+          "spliced_normalized": " this evening they all said ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 5.0,
+          "spliced_tokens": [
+            639,
+            5634,
+            436,
+            439,
+            848,
+            13
+          ],
+          "spliced_text": " This evening they all said.",
+          "spliced_normalized": " this evening they all said ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 10.0,
+          "spliced_tokens": [
+            639,
+            5634,
+            436,
+            439,
+            848,
+            13
+          ],
+          "spliced_text": " This evening they all said.",
+          "spliced_normalized": " this evening they all said ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        }
+      ]
+    },
+    {
+      "pair_idx": 3,
+      "utterance_a_id": "2830-3979-0012",
+      "baseline_tokens": [
+        440,
+        8725,
+        295,
+        527,
+        1265,
+        4393,
+        1463,
+        5680,
+        13
+      ],
+      "baseline_text": " The Word of our God shall stand forever.",
+      "shifts": [
+        {
+          "offset_sec": 2.0,
+          "spliced_tokens": [
+            440,
+            8725,
+            295,
+            527,
+            1265,
+            4393,
+            1463,
+            5680,
+            13
+          ],
+          "spliced_text": " The Word of our God shall stand forever.",
+          "spliced_normalized": " the word of our god shall stand forever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 5.0,
+          "spliced_tokens": [
+            440,
+            8725,
+            295,
+            527,
+            1265,
+            4393,
+            1463,
+            5680,
+            13
+          ],
+          "spliced_text": " The Word of our God shall stand forever.",
+          "spliced_normalized": " the word of our god shall stand forever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 10.0,
+          "spliced_tokens": [
+            440,
+            8725,
+            295,
+            527,
+            1265,
+            4393,
+            1463,
+            5680,
+            13
+          ],
+          "spliced_text": " The Word of our God shall stand forever.",
+          "spliced_normalized": " the word of our god shall stand forever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        }
+      ]
+    },
+    {
+      "pair_idx": 4,
+      "utterance_a_id": "121-127105-0011",
+      "baseline_tokens": [
+        1240,
+        390,
+        264,
+        881,
+        3986,
+        712,
+        3059,
+        286,
+        600,
+        1562,
+        2570,
+        294,
+        720,
+        2535,
+        13,
+        1240,
+        576,
+        362,
+        668,
+        14829,
+        295,
+        604,
+        2035,
+        13
+      ],
+      "baseline_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+      "shifts": [
+        {
+          "offset_sec": 2.0,
+          "spliced_tokens": [
+            1240,
+            390,
+            264,
+            881,
+            3986,
+            712,
+            3059,
+            286,
+            600,
+            1562,
+            2570,
+            294,
+            720,
+            2535,
+            13,
+            1240,
+            576,
+            362,
+            668,
+            14829,
+            295,
+            604,
+            2035,
+            13
+          ],
+          "spliced_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+          "spliced_normalized": " she was the most agreeable woman i ve ever known in her position she would have been worthy of any whatever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 5.0,
+          "spliced_tokens": [
+            1240,
+            390,
+            264,
+            881,
+            3986,
+            712,
+            3059,
+            286,
+            600,
+            1562,
+            2570,
+            294,
+            720,
+            2535,
+            13,
+            1240,
+            576,
+            362,
+            668,
+            14829,
+            295,
+            604,
+            2035,
+            13
+          ],
+          "spliced_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+          "spliced_normalized": " she was the most agreeable woman i ve ever known in her position she would have been worthy of any whatever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        },
+        {
+          "offset_sec": 10.0,
+          "spliced_tokens": [
+            1240,
+            390,
+            264,
+            881,
+            3986,
+            712,
+            3059,
+            286,
+            600,
+            1562,
+            2570,
+            294,
+            720,
+            2535,
+            13,
+            1240,
+            576,
+            362,
+            668,
+            14829,
+            295,
+            604,
+            2035,
+            13
+          ],
+          "spliced_text": " She was the most agreeable woman I've ever known in her position. She would have been worthy of any whatever.",
+          "spliced_normalized": " she was the most agreeable woman i ve ever known in her position she would have been worthy of any whatever ",
+          "spliced_wer": 0.0,
+          "exact_match": true,
+          "first_divergence_idx": null,
+          "wer_delta": 0.0
+        }
+      ]
+    }
+  ],
+  "decision_rule": {
+    "verdict": "UNSOUND",
+    "recommendation": "full-utterance-only sharing (chunk-level sharing violates bidirectional self-attention invariance)",
+    "criteria": {
+      "noise_floor_relative_l2": 0.0020536442420030923,
+      "max_measured_relative_l2": 0.9957969350621992,
+      "noise_floor_multiplier": 484.89261879458826,
+      "threshold_multiplier": 10.0,
+      "exceeds_10x_noise_floor": true,
+      "transcript_diverged_e1_trailing": true,
+      "transcript_diverged_e2_offset": false,
+      "any_transcript_diverged": true
+    }
+  }
+}
