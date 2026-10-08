@@ -1,0 +1,90 @@
+{
+  "benchmark": "scheduler_microbenchmark",
+  "model_scale": "synthetic_whisper_base",
+  "num_encoder_layers": 6,
+  "num_decoder_layers": 6,
+  "hidden_dim": 512,
+  "num_heads": 8,
+  "precision": "torch.float16",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
+  "notes": "Scheduler microbenchmark with random Whisper-shaped weights and synthetic mel inputs. Measures scheduler and batching mechanics, not speech quality or real Whisper inference.",
+  "source_log": "output.txt",
+  "scenarios": {
+    "uniform_dense": {
+      "arrival_profile": "Compressed 6s arrival window, high concurrency (n=24 requests)",
+      "num_repeats": 3,
+      "naive": {
+        "runs_tok_per_sec": [122.35, 147.13, 145.21],
+        "mean_tok_per_sec": 138.23,
+        "runs_total_time_s": [8.01, 6.66, 6.75],
+        "mean_total_time_s": 7.14,
+        "peak_memory_mb": 25.42
+      },
+      "paged_engine": {
+        "runs_tok_per_sec": [155.61, 156.40, 152.55],
+        "mean_tok_per_sec": 154.85,
+        "runs_total_time_s": [6.30, 6.27, 6.42],
+        "mean_total_time_s": 6.33,
+        "peak_memory_mb": 31.06,
+        "prefix_hit_rate_pct": 13.39
+      },
+      "speedup": {
+        "per_run": [1.27, 1.06, 1.05],
+        "min": 1.05,
+        "max": 1.27,
+        "mean": 1.13
+      }
+    },
+    "bursty": {
+      "arrival_profile": "Clustered arrival surges (n=24 requests)",
+      "num_repeats": 3,
+      "naive": {
+        "runs_tok_per_sec": [67.82, 64.67, 65.04],
+        "mean_tok_per_sec": 65.84,
+        "runs_total_time_s": [17.47, 18.32, 18.22],
+        "mean_total_time_s": 18.01,
+        "peak_memory_mb": 25.90
+      },
+      "paged_engine": {
+        "runs_tok_per_sec": [71.50, 71.19, 68.57],
+        "mean_tok_per_sec": 70.42,
+        "runs_total_time_s": [16.57, 16.65, 17.28],
+        "mean_total_time_s": 16.83,
+        "peak_memory_mb": 31.54,
+        "prefix_hit_rate_pct": 12.71
+      },
+      "speedup": {
+        "per_run": [1.05, 1.10, 1.05],
+        "min": 1.05,
+        "max": 1.10,
+        "mean": 1.07
+      }
+    },
+    "uniform_moderate": {
+      "arrival_profile": "Dispersed arrivals across a 15s window (n=24 requests)",
+      "num_repeats": 3,
+      "naive": {
+        "runs_tok_per_sec": [83.39, 83.69, 74.78],
+        "mean_tok_per_sec": 80.62,
+        "runs_total_time_s": [13.01, 12.96, 14.51],
+        "mean_total_time_s": 13.50,
+        "peak_memory_mb": 24.97
+      },
+      "paged_engine": {
+        "runs_tok_per_sec": [83.41, 81.85, 83.51],
+        "mean_tok_per_sec": 82.92,
+        "runs_total_time_s": [13.01, 13.26, 12.99],
+        "mean_total_time_s": 13.09,
+        "peak_memory_mb": 30.60,
+        "prefix_hit_rate_pct": 12.93
+      },
+      "speedup": {
+        "per_run": [1.00, 0.98, 1.12],
+        "min": 0.98,
+        "max": 1.12,
+        "mean": 1.03
+      }
+    }
+  }
+}

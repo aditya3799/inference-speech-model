@@ -1,0 +1,23 @@
+# Paged Dual-Cache Speech Serving Engine — pinned requirements
+# Exact tested versions from runtime environment (Python 3.10 / CUDA 12.4)
+#
+# Install:
+#   pip install -r requirements.txt
+#
+# Note: For CUDA wheel installation if installing torch from scratch:
+#   pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 torchaudio==2.6.0+cu124 \
+#       --index-url https://download.pytorch.org/whl/cu124
+
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
+transformers==4.57.0
+tokenizers==0.22.1
+numpy==1.26.4
+jiwer==4.0.0
+soundfile==0.14.0
+librosa==0.11.0
+datasets==2.21.0
+huggingface_hub==0.36.2
+matplotlib==3.10.0
+pytest==8.4.2

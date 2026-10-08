@@ -2,18 +2,14 @@
 Speech Serving Package: Paged Dual-Cache Serving Engine for Speech Models.
 Includes Streaming Neural Codec TTS, Encoder Paged Attention, Dual-Cache Cross-Attention,
 and Phase-Aware Scheduling.
+
+NOTE: ``paged_kv_cache`` is a local compatibility shim (see ``paged_kv_cache/``
+in the repository root).  No external ``paged_kv_cache`` package is required.
 """
-
-import os
-import sys
-
-# Ensure parent directory is in sys.path so existing paged_kv_cache module can be imported
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
 
 from .models import StreamingMultiCodebookTTSModel, WhisperClassSpeechEncoderDecoderModel
 from .tts_engine import StreamingTTSEngine
+from .block_manager import BlockManager
 from .encoder_block_manager import EncoderBlockManager
 from .encoder_attention import EncoderAttentionBackend
 from .dual_cache_manager import DualCacheManager
