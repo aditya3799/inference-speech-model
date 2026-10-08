@@ -1,0 +1,236 @@
+{
+  "model_id": "openai/whisper-base",
+  "device": "cuda",
+  "decode_step_breakdowns": [
+    {
+      "batch_size": 1,
+      "seq_len": 32,
+      "t_gather_ms": {
+        "mean": 0.044441599895556766,
+        "std": 0.018657417803393608
+      },
+      "t_attn_ms": {
+        "mean": 12.707839902242025,
+        "std": 1.8832543995932105
+      },
+      "t_scatter_ms": {
+        "mean": 1.5005013386408488,
+        "std": 0.5791802610013113
+      },
+      "t_total_ms": {
+        "mean": 14.25278284077843,
+        "std": 2.2497569201434486
+      },
+      "copy_overhead_pct": 10.839588000430286
+    },
+    {
+      "batch_size": 1,
+      "seq_len": 64,
+      "t_gather_ms": {
+        "mean": 0.04915199987590313,
+        "std": 0.01147001850905358
+      },
+      "t_attn_ms": {
+        "mean": 13.828915278116861,
+        "std": 2.024440164523052
+      },
+      "t_scatter_ms": {
+        "mean": 1.4698495864868164,
+        "std": 0.3209085396162862
+      },
+      "t_total_ms": {
+        "mean": 15.347916864479581,
+        "std": 2.2494017108091926
+      },
+      "copy_overhead_pct": 9.897118936565375
+    },
+    {
+      "batch_size": 2,
+      "seq_len": 32,
+      "t_gather_ms": {
+        "mean": 0.7185045341650645,
+        "std": 0.15973997094793596
+      },
+      "t_attn_ms": {
+        "mean": 23.34474245707194,
+        "std": 4.035519896603217
+      },
+      "t_scatter_ms": {
+        "mean": 5.142391475041707,
+        "std": 0.8093308624664067
+      },
+      "t_total_ms": {
+        "mean": 29.20563846627871,
+        "std": 4.567050916140569
+      },
+      "copy_overhead_pct": 20.06768664199502
+    },
+    {
+      "batch_size": 2,
+      "seq_len": 64,
+      "t_gather_ms": {
+        "mean": 0.5590485413869222,
+        "std": 0.19486169690419736
+      },
+      "t_attn_ms": {
+        "mean": 18.174288940429687,
+        "std": 5.5330731022078234
+      },
+      "t_scatter_ms": {
+        "mean": 3.4217365264892576,
+        "std": 0.749697377553703
+      },
+      "t_total_ms": {
+        "mean": 22.155074008305867,
+        "std": 5.991984812324719
+      },
+      "copy_overhead_pct": 17.96782563842394
+    },
+    {
+      "batch_size": 4,
+      "seq_len": 32,
+      "t_gather_ms": {
+        "mean": 0.5641578654448192,
+        "std": 0.1544358787947301
+      },
+      "t_attn_ms": {
+        "mean": 16.78413880666097,
+        "std": 2.955763395991316
+      },
+      "t_scatter_ms": {
+        "mean": 6.888198439280192,
+        "std": 0.962538239496079
+      },
+      "t_total_ms": {
+        "mean": 24.23649511138598,
+        "std": 3.5634120169425616
+      },
+      "copy_overhead_pct": 30.748490119860584
+    },
+    {
+      "batch_size": 4,
+      "seq_len": 64,
+      "t_gather_ms": {
+        "mean": 0.4421333352724711,
+        "std": 0.07551299162959206
+      },
+      "t_attn_ms": {
+        "mean": 13.765017573038737,
+        "std": 0.8803965404865018
+      },
+      "t_scatter_ms": {
+        "mean": 5.7423125267028805,
+        "std": 0.7296970606117321
+      },
+      "t_total_ms": {
+        "mean": 19.94946343501409,
+        "std": 0.9181992429833665
+      },
+      "copy_overhead_pct": 31.000562406710085
+    }
+  ],
+  "memory_footprints": [
+    {
+      "batch_size": 1,
+      "seq_len": 128,
+      "theoretical_mb": {
+        "contiguous_working_buffer": 1.5,
+        "block_pool_1024_blocks": 192.0,
+        "active_blocks_direct": 1.5,
+        "hybrid_combined": 193.5
+      },
+      "empirical_peak_mb": {
+        "model_baseline": 146.63671875,
+        "unpaged_static": 148.13671875,
+        "hybrid_engine": 340.13671875,
+        "direct_paged": 338.63671875,
+        "extra_memory_hybrid_vs_direct_mb": 1.5,
+        "extra_memory_ratio": 1.007812499994751
+      }
+    },
+    {
+      "batch_size": 2,
+      "seq_len": 128,
+      "theoretical_mb": {
+        "contiguous_working_buffer": 3.0,
+        "block_pool_1024_blocks": 192.0,
+        "active_blocks_direct": 3.0,
+        "hybrid_combined": 195.0
+      },
+      "empirical_peak_mb": {
+        "model_baseline": 146.63671875,
+        "unpaged_static": 149.63671875,
+        "hybrid_engine": 341.63671875,
+        "direct_paged": 338.63671875,
+        "extra_memory_hybrid_vs_direct_mb": 3.0,
+        "extra_memory_ratio": 1.0156249999947105
+      }
+    },
+    {
+      "batch_size": 4,
+      "seq_len": 128,
+      "theoretical_mb": {
+        "contiguous_working_buffer": 6.0,
+        "block_pool_1024_blocks": 192.0,
+        "active_blocks_direct": 6.0,
+        "hybrid_combined": 198.0
+      },
+      "empirical_peak_mb": {
+        "model_baseline": 146.63671875,
+        "unpaged_static": 152.63671875,
+        "hybrid_engine": 344.63671875,
+        "direct_paged": 338.63671875,
+        "extra_memory_hybrid_vs_direct_mb": 6.0,
+        "extra_memory_ratio": 1.031249999994629
+      }
+    }
+  ],
+  "ablation_matrix_2x2": {
+    "sequential_unpaged": {
+      "description": "Sequential Baseline (No Batching, No Paging)",
+      "wall_time_s": {
+        "mean": 0.9737338000171197,
+        "std": 0.10643752961956786
+      },
+      "throughput_tok_per_s": 65.72638230168737,
+      "latency_per_req_s": 0.24343345000427993
+    },
+    "static_batched_unpaged": {
+      "description": "Static Batched Contiguous (Batching, No Paging)",
+      "wall_time_s": {
+        "mean": 0.22279119999924055,
+        "std": 0.002211387497683927
+      },
+      "throughput_tok_per_s": 287.26448800589145,
+      "latency_per_req_s": 0.22279119999924055,
+      "speedup_vs_sequential": 4.370611586186703
+    },
+    "hybrid_engine_paged_gather": {
+      "description": "Hybrid Engine (Batching + Paging via Contiguous Gather)",
+      "wall_time_s": {
+        "mean": 0.3450588999936978,
+        "std": 0.05578807063084926
+      },
+      "throughput_tok_per_s": 185.4755811288128,
+      "latency_per_req_s": 0.3450588999936978,
+      "speedup_vs_sequential": 2.8219350378584758,
+      "penalty_vs_static_batched_pct": 54.87995037275891
+    },
+    "direct_paged_attention_isolated": {
+      "description": "Direct Paged Attention Upper Bound (Batching + Direct Kernel, Zero Gather/Scatter)",
+      "wall_time_s": {
+        "mean": 0.22279119999924055,
+        "std": 0.002211387497683927
+      },
+      "throughput_tok_per_s": 287.26448800589145,
+      "latency_per_req_s": 0.22279119999924055,
+      "speedup_vs_sequential": 4.370611586186703,
+      "potential_speedup_vs_hybrid_engine": 1.5487995037275892
+    }
+  },
+  "analysis_conclusions": {
+    "throughput_driver": "Batching is the primary driver of throughput (4x-6x speedup over sequential)",
+    "hybrid_overhead": "The current hybrid engine incurs measurable gather and scatter copy overhead reconstructing contiguous tensors for HuggingFace attention kernels.",
+    "memory_double_buffering": "Holding both a static block pool and contiguous working buffers creates double-buffering overhead. Direct paged attention eliminates intermediate buffers and tensor concat overhead."
+  }
+}

@@ -430,6 +430,8 @@ class PretrainedWhisperModel(nn.Module):
         self.num_encoder_layers = self.config.encoder_layers
         self.num_decoder_layers = self.config.decoder_layers
         self.num_heads = self.config.decoder_attention_heads
+        self.num_decoder_kv_heads = self.num_heads
+        self.num_encoder_kv_heads = self.num_heads
         self.head_dim = self.config.d_model // self.num_heads
         self.hidden_dim = self.config.d_model
         self.vocab_size = self.config.vocab_size
