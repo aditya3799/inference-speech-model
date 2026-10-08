@@ -574,6 +574,61 @@ class TestSpeechServingEngine(unittest.TestCase):
         model.decode_step = real_decode
         print(f">>> EOS & Prompt Test PASSED: Generation stopped at {req.generated_count} tokens upon emitting EOS ({target_eos}), all blocks freed.")
 
+    def test_pretrained_whisper_model_integration(self):
+        """Test PretrainedWhisperModel interface, cross-attention projection caching, and scheduler integration."""
+        print("\n--- Running Test: PretrainedWhisperModel Integration ---")
+        from speech_serving.models import PretrainedWhisperModel
+
+        model = PretrainedWhisperModel(
+            model_name_or_path="openai/whisper-base",
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+        mel = torch.randn(1, 80, 3000, device=self.device, dtype=self.dtype)
+        enc_out, enc_kv = model.encode(mel)
+        self.assertEqual(enc_out.shape[0], 1)
+        self.assertEqual(len(enc_kv), model.num_decoder_layers)
+        self.assertEqual(enc_kv[0][0].shape[1], model.num_heads)
+        self.assertEqual(enc_kv[0][0].shape[3], model.head_dim)
+
+        enc_bm = EncoderBlockManager(
+            num_layers=model.num_encoder_layers,
+            num_heads=model.num_heads,
+            head_dim=model.head_dim,
+            block_size=16,
+            num_blocks=256,
+            dtype=self.dtype,
+            device=self.device,
+        )
+        dec_bm = BlockManager(
+            num_layers=model.num_decoder_layers,
+            num_kv_heads=model.num_heads,
+            head_dim=model.head_dim,
+            block_size=16,
+            num_blocks=256,
+            dtype=self.dtype,
+            device=self.device,
+        )
+        dual = DualCacheManager(enc_bm, dec_bm)
+        scheduler = PhaseAwareSpeechScheduler(
+            model=model,
+            dual_cache_manager=dual,
+            max_batch_size=2,
+            device=self.device,
+            eos_token_id=50257,
+        )
+
+        prompt = torch.tensor([[50258, 50259, 50359, 50363]], device=self.device, dtype=torch.long)
+        req_id = scheduler.submit(mel[0], prompt_token_ids=prompt, max_new_tokens=2, eos_token_id=50257)
+        self.assertIsNotNone(req_id)
+        completed = scheduler.run_until_done()
+        self.assertEqual(len(completed), 1)
+        self.assertEqual(completed[0].generated_count, 2)
+        self.assertEqual(enc_bm.allocated_block_count, 0)
+        self.assertEqual(dec_bm.allocated_block_count, 0)
+        print(">>> PretrainedWhisperModel Integration Test PASSED: Real Whisper encoder/decoder paged serving verified.")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,702 @@
+[
+  {
+    "id": "1284-1181-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1284/1181/1284-1181-0011.flac",
+    "duration": 7.75,
+    "text": "VERY CAREFULLY THE MAGICIAN REMOVED THIS POWDER PLACING IT ALL TOGETHER IN A GOLDEN DISH WHERE HE MIXED IT WITH A GOLDEN SPOON",
+    "stratum": "medium"
+  },
+  {
+    "id": "237-126133-0019",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/237/126133/237-126133-0019.flac",
+    "duration": 7.12,
+    "text": "DEAR ME EJACULATED THE OLD GENTLEMAN IN THE UTMOST AMAZEMENT AND SUCH A TIME AS I'VE HAD TO GET HER HERE TOO",
+    "stratum": "medium"
+  },
+  {
+    "id": "1221-135767-0004",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1221/135767/1221-135767-0004.flac",
+    "duration": 19.09,
+    "text": "WE HAVE SPOKEN OF PEARL'S RICH AND LUXURIANT BEAUTY A BEAUTY THAT SHONE WITH DEEP AND VIVID TINTS A BRIGHT COMPLEXION EYES POSSESSING INTENSITY BOTH OF DEPTH AND GLOW AND HAIR ALREADY OF A DEEP GLOSSY BROWN AND WHICH IN AFTER YEARS WOULD BE NEARLY AKIN TO BLACK",
+    "stratum": "long"
+  },
+  {
+    "id": "5683-32865-0003",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5683/32865/5683-32865-0003.flac",
+    "duration": 3.51,
+    "text": "THEY ARE COUSINS YOU KNOW WE ARE ALL COUSINS",
+    "stratum": "short"
+  },
+  {
+    "id": "1580-141084-0031",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1580/141084/1580-141084-0031.flac",
+    "duration": 6.47,
+    "text": "WE WANT TO KNOW MISTER GILCHRIST HOW YOU AN HONOURABLE MAN EVER CAME TO COMMIT SUCH AN ACTION AS THAT OF YESTERDAY",
+    "stratum": "medium"
+  },
+  {
+    "id": "8555-284447-0023",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8555/284447/8555-284447-0023.flac",
+    "duration": 7.155,
+    "text": "I COULDN'T SHIVER MUCH BEIN BOUND SO TIGHT BUT WHEN I'M LOOSE I MEAN TO HAVE JUS ONE GOOD SHIVER TO RELIEVE MY FEELIN'S",
+    "stratum": "medium"
+  },
+  {
+    "id": "7021-85628-0017",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7021/85628/7021-85628-0017.flac",
+    "duration": 2.155,
+    "text": "SO IT IS SAID ANDERS",
+    "stratum": "short"
+  },
+  {
+    "id": "1089-134686-0018",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1089/134686/1089-134686-0018.flac",
+    "duration": 15.72,
+    "text": "IT WAS STRANGE TOO THAT HE FOUND AN ARID PLEASURE IN FOLLOWING UP TO THE END THE RIGID LINES OF THE DOCTRINES OF THE CHURCH AND PENETRATING INTO OBSCURE SILENCES ONLY TO HEAR AND FEEL THE MORE DEEPLY HIS OWN CONDEMNATION",
+    "stratum": "long"
+  },
+  {
+    "id": "3575-170457-0027",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3575/170457/3575-170457-0027.flac",
+    "duration": 4.58,
+    "text": "I CANNOT DENY MYSELF THE GRATIFICATION OF INSERTING SOUTHEY'S REPLY",
+    "stratum": "short"
+  },
+  {
+    "id": "1089-134691-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1089/134691/1089-134691-0011.flac",
+    "duration": 20.01,
+    "text": "THEIR PIETY WOULD BE LIKE THEIR NAMES LIKE THEIR FACES LIKE THEIR CLOTHES AND IT WAS IDLE FOR HIM TO TELL HIMSELF THAT THEIR HUMBLE AND CONTRITE HEARTS IT MIGHT BE PAID A FAR RICHER TRIBUTE OF DEVOTION THAN HIS HAD EVER BEEN A GIFT TENFOLD MORE ACCEPTABLE THAN HIS ELABORATE ADORATION",
+    "stratum": "long"
+  },
+  {
+    "id": "3729-6852-0004",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3729/6852/3729-6852-0004.flac",
+    "duration": 16.46,
+    "text": "HER FACE WAS AN ENIGMA FOR IT INSPIRED EVERYONE WITH THE WARMEST SYMPATHY AND YET IF YOU EXAMINED IT ATTENTIVELY THERE WAS NOT ONE BEAUTIFUL FEATURE SHE COULD NOT BE CALLED HANDSOME BUT NO ONE COULD HAVE THOUGHT HER UGLY",
+    "stratum": "long"
+  },
+  {
+    "id": "1089-134686-0035",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1089/134686/1089-134686-0035.flac",
+    "duration": 3.445,
+    "text": "HE HAD THE FAITH IN HIM THAT MOVES MOUNTAINS",
+    "stratum": "short"
+  },
+  {
+    "id": "5683-32879-0020",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5683/32879/5683-32879-0020.flac",
+    "duration": 6.545,
+    "text": "AND SHE THREW HER ARMS ROUND HER COUSIN'S NECK AND BRAVE RACHEL AT LAST BURST INTO TEARS",
+    "stratum": "medium"
+  },
+  {
+    "id": "7127-75946-0006",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7127/75946/7127-75946-0006.flac",
+    "duration": 7.98,
+    "text": "HE HAS GIVEN THEM WITH TOO MUCH GRACE NOT TO HAVE OTHERS STILL TO GIVE IF THEY ARE REQUIRED WHICH IS THE CASE AT THE PRESENT MOMENT",
+    "stratum": "medium"
+  },
+  {
+    "id": "7729-102255-0041",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7729/102255/7729-102255-0041.flac",
+    "duration": 12.415,
+    "text": "THE WHOLE PROCEEDING WAS SO CHILDISH THE MISERABLE PLOT SO TRANSPARENT THE OUTRAGE SO GROSS AS TO BRING DISGUST TO THE BETTER CLASS OF BORDER RUFFIANS WHO WERE WITNESSES AND ACCESSORIES",
+    "stratum": "long"
+  },
+  {
+    "id": "6829-68771-0029",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/6829/68771/6829-68771-0029.flac",
+    "duration": 8.945,
+    "text": "BETH WAS A BEAUTIFUL GIRL THE HANDSOMEST OF THE THREE COUSINS BY FAR YET ELIZA SURPASSED HER IN NATURAL CHARM AND SEEMED WELL AWARE OF THE FACT",
+    "stratum": "medium"
+  },
+  {
+    "id": "8230-279154-0035",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8230/279154/8230-279154-0035.flac",
+    "duration": 7.555,
+    "text": "THUS NO KNOWLEDGE AS TO THE PAST IS TO BE DERIVED FROM THE FEELING OF FAMILIARITY ALONE",
+    "stratum": "medium"
+  },
+  {
+    "id": "2300-131720-0022",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2300/131720/2300-131720-0022.flac",
+    "duration": 13.665,
+    "text": "MEANWHILE HE HAD CALLED UPON ME TO MAKE A REPORT OF THE THREE WIRE SYSTEM KNOWN IN ENGLAND AS THE HOPKINSON BOTH DOCTOR JOHN HOPKINSON AND MISTER EDISON BEING INDEPENDENT INVENTORS AT PRACTICALLY THE SAME TIME",
+    "stratum": "long"
+  },
+  {
+    "id": "7127-75947-0040",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7127/75947/7127-75947-0040.flac",
+    "duration": 13.79,
+    "text": "IN THIS WAY THE FETE OF THE WHOLE COURT WAS A FETE ALSO FOR THE MYSTERIOUS INHABITANTS OF THE FOREST FOR CERTAINLY THE DEER IN THE BRAKE THE PHEASANT ON THE BRANCH THE FOX IN ITS HOLE WERE ALL LISTENING",
+    "stratum": "long"
+  },
+  {
+    "id": "61-70968-0043",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/61/70968/61-70968-0043.flac",
+    "duration": 6.735,
+    "text": "FRIENDS SAID MONTFICHET FAINTLY TO THE WRESTLERS BEAR US ESCORT SO FAR AS THE SHERIFF'S HOUSE",
+    "stratum": "medium"
+  },
+  {
+    "id": "672-122797-0028",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/672/122797/672-122797-0028.flac",
+    "duration": 2.61,
+    "text": "THIS EVENING THEY ALL SAID",
+    "stratum": "short"
+  },
+  {
+    "id": "1320-122617-0041",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1320/122617/1320-122617-0041.flac",
+    "duration": 4.15,
+    "text": "UNCAS CAST HIS SKIN AND STEPPED FORTH IN HIS OWN BEAUTIFUL PROPORTIONS",
+    "stratum": "short"
+  },
+  {
+    "id": "2830-3979-0012",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2830/3979/2830-3979-0012.flac",
+    "duration": 3.625,
+    "text": "THE WORD OF OUR GOD SHALL STAND FOREVER",
+    "stratum": "short"
+  },
+  {
+    "id": "1221-135766-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1221/135766/1221-135766-0011.flac",
+    "duration": 21.345,
+    "text": "BEHOLDING IT HESTER WAS CONSTRAINED TO RUSH TOWARDS THE CHILD TO PURSUE THE LITTLE ELF IN THE FLIGHT WHICH SHE INVARIABLY BEGAN TO SNATCH HER TO HER BOSOM WITH A CLOSE PRESSURE AND EARNEST KISSES NOT SO MUCH FROM OVERFLOWING LOVE AS TO ASSURE HERSELF THAT PEARL WAS FLESH AND BLOOD AND NOT UTTERLY DELUSIVE",
+    "stratum": "long"
+  },
+  {
+    "id": "908-157963-0015",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/908/157963/908-157963-0015.flac",
+    "duration": 14.465,
+    "text": "O LITTLE CLOUD THE VIRGIN SAID I CHARGE THEE TO TELL ME WHY THOU COMPLAINEST NOW WHEN IN ONE HOUR THOU FADE AWAY THEN WE SHALL SEEK THEE BUT NOT FIND AH THEL IS LIKE TO THEE",
+    "stratum": "long"
+  },
+  {
+    "id": "1320-122617-0010",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1320/122617/1320-122617-0010.flac",
+    "duration": 10.0,
+    "text": "THE TASK WILL NOT BE DIFFICULT RETURNED DAVID HESITATING THOUGH I GREATLY FEAR YOUR PRESENCE WOULD RATHER INCREASE THAN MITIGATE HIS UNHAPPY FORTUNES",
+    "stratum": "medium"
+  },
+  {
+    "id": "8555-284447-0010",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8555/284447/8555-284447-0010.flac",
+    "duration": 12.93,
+    "text": "CONTROL YOURSELVES MY DEARS REPLIED THE BOOLOOROO THE WORST PUNISHMENT I KNOW HOW TO INFLICT ON ANYONE THIS PRISONER IS ABOUT TO SUFFER YOU'LL SEE A VERY PRETTY PATCHING MY ROYAL DAUGHTERS",
+    "stratum": "long"
+  },
+  {
+    "id": "5142-33396-0048",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5142/33396/5142-33396-0048.flac",
+    "duration": 3.96,
+    "text": "BY THE HAMMER OF THOR SHOUTED GRIM HERE IS NO STINGY COWARD",
+    "stratum": "short"
+  },
+  {
+    "id": "4970-29095-0007",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0007.flac",
+    "duration": 14.81,
+    "text": "I HAVE NOT ASKED HIM RUTH REPLIED WITH A LOOK THAT MIGHT IMPLY THAT SHE WAS ONE OF THOSE DETERMINED LITTLE BODIES WHO FIRST MADE UP HER OWN MIND AND THEN COMPELLED OTHERS TO MAKE UP THEIRS IN ACCORDANCE WITH HERS",
+    "stratum": "long"
+  },
+  {
+    "id": "121-127105-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/121/127105/121-127105-0011.flac",
+    "duration": 5.78,
+    "text": "SHE WAS THE MOST AGREEABLE WOMAN I'VE EVER KNOWN IN HER POSITION SHE WOULD HAVE BEEN WORTHY OF ANY WHATEVER",
+    "stratum": "medium"
+  },
+  {
+    "id": "908-157963-0018",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/908/157963/908-157963-0018.flac",
+    "duration": 4.255,
+    "text": "AND FEAREST THOU BECAUSE I VANISH AND AM SEEN NO MORE",
+    "stratum": "short"
+  },
+  {
+    "id": "61-70970-0031",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/61/70970/61-70970-0031.flac",
+    "duration": 5.135,
+    "text": "CRIED HE WAVING THE LANTHORN BEFORE HIM TO MAKE SURE THAT THESE WERE NO GHOSTS IN FRONT OF HIM",
+    "stratum": "medium"
+  },
+  {
+    "id": "4992-41797-0000",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4992/41797/4992-41797-0000.flac",
+    "duration": 5.485,
+    "text": "YES DEAD THESE FOUR YEARS AN A GOOD JOB FOR HER TOO",
+    "stratum": "medium"
+  },
+  {
+    "id": "61-70970-0020",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/61/70970/61-70970-0020.flac",
+    "duration": 5.025,
+    "text": "WILL WHISPERED ROBIN OPENING HIS DOOR AS HE SPOKE ARE YOU READY",
+    "stratum": "medium"
+  },
+  {
+    "id": "2094-142345-0009",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2094/142345/2094-142345-0009.flac",
+    "duration": 14.405,
+    "text": "FOR THE GREAT BARN DOORS ARE THROWN WIDE OPEN AND MEN ARE BUSY THERE MENDING THE HARNESS UNDER THE SUPERINTENDENCE OF MISTER GOBY THE WHITTAW OTHERWISE SADDLER WHO ENTERTAINS THEM WITH THE LATEST TREDDLESTON GOSSIP",
+    "stratum": "long"
+  },
+  {
+    "id": "1580-141084-0016",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1580/141084/1580-141084-0016.flac",
+    "duration": 5.96,
+    "text": "MY FRIEND DID NOT APPEAR TO BE DEPRESSED BY HIS FAILURE BUT SHRUGGED HIS SHOULDERS IN HALF HUMOROUS RESIGNATION",
+    "stratum": "medium"
+  },
+  {
+    "id": "1188-133604-0016",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1188/133604/1188-133604-0016.flac",
+    "duration": 16.595,
+    "text": "THIS AT ONCE COMPELS YOU TO UNDERSTAND THAT THE WORK IS TO BE IMAGINATIVE AND DECORATIVE THAT IT REPRESENTS BEAUTIFUL THINGS IN THE CLEAREST WAY BUT NOT UNDER EXISTING CONDITIONS AND THAT IN FACT YOU ARE PRODUCING JEWELER'S WORK RATHER THAN PICTURES",
+    "stratum": "long"
+  },
+  {
+    "id": "5142-36586-0003",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5142/36586/5142-36586-0003.flac",
+    "duration": 5.055,
+    "text": "BUT THIS SUBJECT WILL BE MORE PROPERLY DISCUSSED WHEN WE TREAT OF THE DIFFERENT RACES OF MANKIND",
+    "stratum": "medium"
+  },
+  {
+    "id": "6930-81414-0001",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/6930/81414/6930-81414-0001.flac",
+    "duration": 17.485,
+    "text": "I HEARD A NOISE BEHIND I TURNED AND SAW KAFFAR HIS BLACK EYES SHINING WHILE IN HIS HAND HE HELD A GLEAMING KNIFE HE LIFTED IT ABOVE HIS HEAD AS IF TO STRIKE BUT I HAD THE STRENGTH OF TEN MEN AND I HURLED HIM FROM ME",
+    "stratum": "long"
+  },
+  {
+    "id": "2830-3980-0002",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2830/3980/2830-3980-0002.flac",
+    "duration": 2.025,
+    "text": "HE WAS THE LAST TO TURN TO CHRIST",
+    "stratum": "short"
+  },
+  {
+    "id": "1188-133604-0005",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1188/133604/1188-133604-0005.flac",
+    "duration": 8.56,
+    "text": "IT IS THE HEAD OF A PARROT WITH A LITTLE FLOWER IN HIS BEAK FROM A PICTURE OF CARPACCIO'S ONE OF HIS SERIES OF THE LIFE OF SAINT GEORGE",
+    "stratum": "medium"
+  },
+  {
+    "id": "4970-29095-0012",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0012.flac",
+    "duration": 4.68,
+    "text": "AND BESIDES SUPPOSE THEE DOES LEARN MEDICINE",
+    "stratum": "short"
+  },
+  {
+    "id": "260-123286-0031",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/260/123286/260-123286-0031.flac",
+    "duration": 5.06,
+    "text": "AS FOR THE ICHTHYOSAURUS HAS HE RETURNED TO HIS SUBMARINE CAVERN",
+    "stratum": "medium"
+  },
+  {
+    "id": "672-122797-0048",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/672/122797/672-122797-0048.flac",
+    "duration": 6.555,
+    "text": "IF IT ONLY WERE NOT SO DARK HERE AND SO TERRIBLY LONELY",
+    "stratum": "medium"
+  },
+  {
+    "id": "1284-1180-0012",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1284/1180/1284-1180-0012.flac",
+    "duration": 4.88,
+    "text": "WE HAVE COME FROM A FAR LONELIER PLACE THAN THIS A LONELIER PLACE",
+    "stratum": "short"
+  },
+  {
+    "id": "7176-92135-0020",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7176/92135/7176-92135-0020.flac",
+    "duration": 7.165,
+    "text": "DOUBLE NINE TWO THREE ELSINORE DOUBLE NINE YES HALLO IS THAT YOU HORATIO HAMLET SPEAKING",
+    "stratum": "medium"
+  },
+  {
+    "id": "908-31957-0006",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/908/31957/908-31957-0006.flac",
+    "duration": 5.89,
+    "text": "OPEN THY HEART WIDE AND FOLD WITHIN THE WET WINGS OF THY DOVE",
+    "stratum": "medium"
+  },
+  {
+    "id": "8455-210777-0024",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8455/210777/8455-210777-0024.flac",
+    "duration": 7.56,
+    "text": "HOW MUCH OF EVIL OF REAL ACCOMPLISHED EVIL HAD THERE NOT OCCURRED TO ME DURING THE LAST FEW DAYS",
+    "stratum": "medium"
+  },
+  {
+    "id": "1580-141083-0032",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1580/141083/1580-141083-0032.flac",
+    "duration": 4.135,
+    "text": "WATSON I HAVE ALWAYS DONE YOU AN INJUSTICE THERE ARE OTHERS",
+    "stratum": "short"
+  },
+  {
+    "id": "2830-3980-0057",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2830/3980/2830-3980-0057.flac",
+    "duration": 8.07,
+    "text": "THE ARIANS TOOK CHRIST FOR A NOBLE AND PERFECT CREATURE SUPERIOR EVEN TO THE ANGELS BECAUSE BY HIM GOD CREATED HEAVEN AND EARTH",
+    "stratum": "medium"
+  },
+  {
+    "id": "8230-279154-0019",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8230/279154/8230-279154-0019.flac",
+    "duration": 18.145,
+    "text": "IT WOULD SEEM THAT ONLY RATHER RECENT EVENTS CAN BE PLACED AT ALL ACCURATELY BY MEANS OF FEELINGS GIVING THEIR TEMPORAL RELATION TO THE PRESENT BUT IT IS CLEAR THAT SUCH FEELINGS MUST PLAY AN ESSENTIAL PART IN THE PROCESS OF DATING REMEMBERED EVENTS",
+    "stratum": "long"
+  },
+  {
+    "id": "3575-170457-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3575/170457/3575-170457-0011.flac",
+    "duration": 7.015,
+    "text": "BUT IT IS NOT WITH A VIEW TO DISTINCTION THAT YOU SHOULD CULTIVATE THIS TALENT IF YOU CONSULT YOUR OWN HAPPINESS",
+    "stratum": "medium"
+  },
+  {
+    "id": "121-127105-0006",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/121/127105/121-127105-0006.flac",
+    "duration": 4.725,
+    "text": "THE OTHERS RESENTED POSTPONEMENT BUT IT WAS JUST HIS SCRUPLES THAT CHARMED ME",
+    "stratum": "short"
+  },
+  {
+    "id": "237-126133-0001",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/237/126133/237-126133-0001.flac",
+    "duration": 11.965,
+    "text": "EVERY CHANCE SHE COULD STEAL AFTER PRACTICE HOURS WERE OVER AND AFTER THE CLAMOROUS DEMANDS OF THE BOYS UPON HER TIME WERE FULLY SATISFIED WAS SEIZED TO FLY ON THE WINGS OF THE WIND TO THE FLOWERS",
+    "stratum": "medium"
+  },
+  {
+    "id": "5683-32866-0026",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5683/32866/5683-32866-0026.flac",
+    "duration": 2.34,
+    "text": "I BOLDLY LIGHTED MY CHEROOT",
+    "stratum": "short"
+  },
+  {
+    "id": "7176-88083-0012",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7176/88083/7176-88083-0012.flac",
+    "duration": 5.045,
+    "text": "THE HAWK ALIGHTED ON THE DEAD BRANCH AND SAT UPRIGHT MOTIONLESS AS IF SURPRISED",
+    "stratum": "medium"
+  },
+  {
+    "id": "1995-1826-0009",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1995/1826/1995-1826-0009.flac",
+    "duration": 7.57,
+    "text": "YOU OUGHT TO KNOW JOHN IF I TEACH NEGROES I'LL SCARCELY SEE MUCH OF PEOPLE IN MY OWN CLASS",
+    "stratum": "medium"
+  },
+  {
+    "id": "8224-274381-0000",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8224/274381/8224-274381-0000.flac",
+    "duration": 17.74,
+    "text": "THOUGH THROWN INTO PRISON FOR THIS ENTERPRISE AND DETAINED SOME TIME HE WAS NOT DISCOURAGED BUT STILL CONTINUED BY HIS COUNTENANCE AND PROTECTION TO INFUSE SPIRIT INTO THE DISTRESSED ROYALISTS",
+    "stratum": "long"
+  },
+  {
+    "id": "3570-5695-0000",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3570/5695/3570-5695-0000.flac",
+    "duration": 4.83,
+    "text": "IN A GENERAL WAY THOUGH NOT WHOLLY NOR CONSISTENTLY THESE TWO GROUPS COINCIDE",
+    "stratum": "short"
+  },
+  {
+    "id": "260-123288-0008",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/260/123288/260-123288-0008.flac",
+    "duration": 5.515,
+    "text": "THERE'S A HEAVY STORM COMING ON I CRIED POINTING TOWARDS THE HORIZON",
+    "stratum": "medium"
+  },
+  {
+    "id": "2094-142345-0035",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2094/142345/2094-142345-0035.flac",
+    "duration": 3.575,
+    "text": "BUT NOT MORE THAN WHAT'S IN THE BIBLE AUNT SAID DINAH",
+    "stratum": "short"
+  },
+  {
+    "id": "6930-81414-0026",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/6930/81414/6930-81414-0026.flac",
+    "duration": 3.075,
+    "text": "MY OVERWROUGHT NERVES YIELDED AT LAST",
+    "stratum": "short"
+  },
+  {
+    "id": "4970-29095-0000",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0000.flac",
+    "duration": 2.865,
+    "text": "SHE WAS TIRED OF OTHER THINGS",
+    "stratum": "short"
+  },
+  {
+    "id": "2300-131720-0033",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2300/131720/2300-131720-0033.flac",
+    "duration": 17.605,
+    "text": "IN DECEMBER EIGHTEEN EIGHTY EIGHT MISTER W J JENKS READ AN INTERESTING PAPER BEFORE THE AMERICAN INSTITUTE OF ELECTRICAL ENGINEERS ON THE SIX YEARS OF PRACTICAL EXPERIENCE HAD UP TO THAT TIME WITH THE METER THEN MORE GENERALLY IN USE THAN ANY OTHER",
+    "stratum": "long"
+  },
+  {
+    "id": "3729-6852-0005",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3729/6852/3729-6852-0005.flac",
+    "duration": 18.54,
+    "text": "SILVIA WAS THE ADORATION OF FRANCE AND HER TALENT WAS THE REAL SUPPORT OF ALL THE COMEDIES WHICH THE GREATEST AUTHORS WROTE FOR HER ESPECIALLY OF THE PLAYS OF MARIVAUX FOR WITHOUT HER HIS COMEDIES WOULD NEVER HAVE GONE TO POSTERITY",
+    "stratum": "long"
+  },
+  {
+    "id": "908-157963-0001",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/908/157963/908-157963-0001.flac",
+    "duration": 2.885,
+    "text": "O LIFE OF THIS OUR SPRING",
+    "stratum": "short"
+  },
+  {
+    "id": "2300-131720-0019",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2300/131720/2300-131720-0019.flac",
+    "duration": 14.82,
+    "text": "THE STRONG POSITION HELD BY THE EDISON SYSTEM UNDER THE STRENUOUS COMPETITION THAT WAS ALREADY SPRINGING UP WAS ENORMOUSLY IMPROVED BY THE INTRODUCTION OF THE THREE WIRE SYSTEM AND IT GAVE AN IMMEDIATE IMPETUS TO INCANDESCENT LIGHTING",
+    "stratum": "long"
+  },
+  {
+    "id": "2830-3980-0051",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2830/3980/2830-3980-0051.flac",
+    "duration": 6.44,
+    "text": "WHEN YOU ARGUE ABOUT THE NATURE OF GOD APART FROM THE QUESTION OF JUSTIFICATION YOU MAY BE AS PROFOUND AS YOU LIKE",
+    "stratum": "medium"
+  },
+  {
+    "id": "8455-210777-0051",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8455/210777/8455-210777-0051.flac",
+    "duration": 13.96,
+    "text": "WHAT WORLD WIDE INIQUITY SUCH A SPEECH AS THAT DISCLOSES SAID I STILL TURNING MYSELF TO THE CAPTAIN FOR THOUGH I WOULD HAVE CRUSHED THEM BOTH BY MY WORDS HAD IT BEEN POSSIBLE MY DISLIKE CENTRED ITSELF ON SIR FERDINANDO",
+    "stratum": "long"
+  },
+  {
+    "id": "1580-141084-0028",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1580/141084/1580-141084-0028.flac",
+    "duration": 2.655,
+    "text": "THERE WAS NO MAN SIR",
+    "stratum": "short"
+  },
+  {
+    "id": "8455-210777-0042",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8455/210777/8455-210777-0042.flac",
+    "duration": 4.78,
+    "text": "YOU HEAR WHAT SIR FERDINANDO BROWN HAS SAID REPLIED CAPTAIN BATTLEAX",
+    "stratum": "short"
+  },
+  {
+    "id": "7729-102255-0006",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7729/102255/7729-102255-0006.flac",
+    "duration": 17.005,
+    "text": "COMING BY WAY OF THE MISSOURI RIVER TOWNS HE FELL FIRST AMONG BORDER RUFFIAN COMPANIONSHIP AND INFLUENCES AND PERHAPS HAVING HIS INCLINATIONS ALREADY MOLDED BY HIS WASHINGTON INSTRUCTIONS HIS EARLY IMPRESSIONS WERE DECIDEDLY ADVERSE TO THE FREE STATE CAUSE",
+    "stratum": "long"
+  },
+  {
+    "id": "7729-102255-0039",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7729/102255/7729-102255-0039.flac",
+    "duration": 6.815,
+    "text": "THE INMATES BEING REMOVED AT THE APPOINTED HOUR A FEW CANNON BALLS WERE FIRED THROUGH THE STONE WALLS",
+    "stratum": "medium"
+  },
+  {
+    "id": "4507-16021-0039",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4507/16021/4507-16021-0039.flac",
+    "duration": 15.42,
+    "text": "ONE PERCEIVES WITHOUT UNDERSTANDING IT A HIDEOUS MURMUR SOUNDING ALMOST LIKE HUMAN ACCENTS BUT MORE NEARLY RESEMBLING A HOWL THAN AN ARTICULATE WORD",
+    "stratum": "long"
+  },
+  {
+    "id": "4970-29095-0026",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0026.flac",
+    "duration": 10.93,
+    "text": "IF I GO TO MEETING AT ALL I LIKE BEST TO SIT IN THE QUIET OLD HOUSE IN GERMANTOWN WHERE THE WINDOWS ARE ALL OPEN AND I CAN SEE THE TREES AND HEAR THE STIR OF THE LEAVES",
+    "stratum": "medium"
+  },
+  {
+    "id": "1188-133604-0011",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1188/133604/1188-133604-0011.flac",
+    "duration": 15.19,
+    "text": "THEY ARE BEYOND ALL OTHER WORKS THAT I KNOW EXISTING DEPENDENT FOR THEIR EFFECT ON LOW SUBDUED TONES THEIR FAVORITE CHOICE IN TIME OF DAY BEING EITHER DAWN OR TWILIGHT AND EVEN THEIR BRIGHTEST SUNSETS PRODUCED CHIEFLY OUT OF GRAY PAPER",
+    "stratum": "long"
+  },
+  {
+    "id": "5683-32866-0025",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5683/32866/5683-32866-0025.flac",
+    "duration": 3.47,
+    "text": "I DID NOT EVEN TAKE THE PRECAUTION OF SMOKING UP THE CHIMNEY",
+    "stratum": "short"
+  },
+  {
+    "id": "8555-284447-0006",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8555/284447/8555-284447-0006.flac",
+    "duration": 12.955,
+    "text": "IN ONE PLACE AT THE HEAD OF THE ROOM WAS A RAISED PLATFORM FOR THE ROYAL FAMILY WITH ELEGANT THRONE CHAIRS FOR THE KING AND QUEEN AND SIX SMALLER BUT RICHLY UPHOLSTERED CHAIRS FOR THE SNUBNOSED PRINCESSES",
+    "stratum": "long"
+  },
+  {
+    "id": "8463-294828-0007",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8463/294828/8463-294828-0007.flac",
+    "duration": 12.96,
+    "text": "CLASSIFYING WAS EVERYTHING TO HIM SO HE KNEW NOTHING ELSE WELL VERSED IN THE THEORY OF CLASSIFICATION HE WAS POORLY VERSED IN ITS PRACTICAL APPLICATION AND I DOUBT THAT HE COULD TELL A SPERM WHALE FROM A BALEEN WHALE",
+    "stratum": "long"
+  },
+  {
+    "id": "2961-960-0008",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/2961/960/2961-960-0008.flac",
+    "duration": 15.455,
+    "text": "WE DO NOT KNOW HOW PLATO WOULD HAVE ARRANGED HIS OWN DIALOGUES OR WHETHER THE THOUGHT OF ARRANGING ANY OF THEM BESIDES THE TWO TRILOGIES WHICH HE HAS EXPRESSLY CONNECTED WAS EVER PRESENT TO HIS MIND",
+    "stratum": "long"
+  },
+  {
+    "id": "4992-41797-0013",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4992/41797/4992-41797-0013.flac",
+    "duration": 9.8,
+    "text": "SHE MAKES EFFORT AFTER EFFORT TREMBLING WITH EAGERNESS AND WHEN SHE FAILS TO REPRODUCE WHAT SHE SEES SHE WORKS HERSELF INTO A FRENZY OF GRIEF AND DISAPPOINTMENT",
+    "stratum": "medium"
+  },
+  {
+    "id": "3570-5695-0013",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/3570/5695/3570-5695-0013.flac",
+    "duration": 4.64,
+    "text": "CONSUMPTION BECOMES A LARGER ELEMENT IN THE STANDARD OF LIVING IN THE CITY THAN IN THE COUNTRY",
+    "stratum": "short"
+  },
+  {
+    "id": "6930-81414-0007",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/6930/81414/6930-81414-0007.flac",
+    "duration": 4.365,
+    "text": "NOTHING MORE NOT EVEN THE WRIST TO WHICH IT MIGHT BE ATTACHED",
+    "stratum": "short"
+  },
+  {
+    "id": "4077-13751-0012",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4077/13751/4077-13751-0012.flac",
+    "duration": 12.015,
+    "text": "THE LIEUTENANT GOVERNOR LILBURN W BOGGS AFTERWARD GOVERNOR WAS A PRONOUNCED MORMON HATER AND THROUGHOUT THE PERIOD OF THE TROUBLES HE MANIFESTED SYMPATHY WITH THE PERSECUTORS",
+    "stratum": "long"
+  },
+  {
+    "id": "8230-279154-0025",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8230/279154/8230-279154-0025.flac",
+    "duration": 21.78,
+    "text": "WE MIGHT PROVISIONALLY THOUGH PERHAPS NOT QUITE CORRECTLY DEFINE MEMORY AS THAT WAY OF KNOWING ABOUT THE PAST WHICH HAS NO ANALOGUE IN OUR KNOWLEDGE OF THE FUTURE SUCH A DEFINITION WOULD AT LEAST SERVE TO MARK THE PROBLEM WITH WHICH WE ARE CONCERNED THOUGH SOME EXPECTATIONS MAY DESERVE TO RANK WITH MEMORY AS REGARDS IMMEDIACY",
+    "stratum": "long"
+  },
+  {
+    "id": "5142-33396-0062",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5142/33396/5142-33396-0062.flac",
+    "duration": 2.9,
+    "text": "NOW SHE PUT HER HAND ON HIS ARM AND SMILED AND SAID",
+    "stratum": "short"
+  },
+  {
+    "id": "7127-75947-0013",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7127/75947/7127-75947-0013.flac",
+    "duration": 5.045,
+    "text": "I REMEMBER NOW AND I CONGRATULATE MYSELF DO YOU LOVE ANY ONE",
+    "stratum": "medium"
+  },
+  {
+    "id": "4077-13751-0015",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4077/13751/4077-13751-0015.flac",
+    "duration": 13.475,
+    "text": "A SMALL SETTLEMENT HAD BEEN FOUNDED BY MORMON FAMILIES ON SHOAL CREEK AND HERE ON THE THIRTIETH OF OCTOBER EIGHTEEN THIRTY EIGHT A COMPANY OF TWO HUNDRED AND FORTY FELL UPON THE HAPLESS SETTLERS AND BUTCHERED A SCORE",
+    "stratum": "long"
+  },
+  {
+    "id": "4446-2275-0008",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4446/2275/4446-2275-0008.flac",
+    "duration": 4.13,
+    "text": "WHEN DID YOU COME BARTLEY AND HOW DID IT HAPPEN YOU HAVEN'T SPOKEN A WORD",
+    "stratum": "short"
+  },
+  {
+    "id": "6930-81414-0009",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/6930/81414/6930-81414-0009.flac",
+    "duration": 12.015,
+    "text": "I AWOKE TO CONSCIOUSNESS FIGHTING AT FIRST IT SEEMED AS IF I WAS FIGHTING WITH A PHANTOM BUT GRADUALLY MY OPPONENT BECAME MORE REAL TO ME IT WAS KAFFAR",
+    "stratum": "long"
+  },
+  {
+    "id": "1188-133604-0023",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1188/133604/1188-133604-0023.flac",
+    "duration": 23.67,
+    "text": "THE COLORIST SAYS FIRST OF ALL AS MY DELICIOUS PAROQUET WAS RUBY SO THIS NASTY VIPER SHALL BE BLACK AND THEN IS THE QUESTION CAN I ROUND HIM OFF EVEN THOUGH HE IS BLACK AND MAKE HIM SLIMY AND YET SPRINGY AND CLOSE DOWN CLOTTED LIKE A POOL OF BLACK BLOOD ON THE EARTH ALL THE SAME",
+    "stratum": "long"
+  },
+  {
+    "id": "4446-2275-0035",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4446/2275/4446-2275-0035.flac",
+    "duration": 4.075,
+    "text": "ALEXANDER ROSE AND SHOOK HIMSELF ANGRILY YES I KNOW I'M COWARDLY",
+    "stratum": "short"
+  },
+  {
+    "id": "61-70968-0045",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/61/70968/61-70968-0045.flac",
+    "duration": 3.475,
+    "text": "PRAY FOLLOW US WITH MINE AND MY LORD SHERIFF'S MEN",
+    "stratum": "short"
+  },
+  {
+    "id": "1089-134691-0010",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1089/134691/1089-134691-0010.flac",
+    "duration": 3.195,
+    "text": "BROTHER MAC ARDLE BROTHER KEOGH",
+    "stratum": "short"
+  },
+  {
+    "id": "5105-28241-0010",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/5105/28241/5105-28241-0010.flac",
+    "duration": 2.31,
+    "text": "OCEAN REIGNED SUPREME",
+    "stratum": "short"
+  },
+  {
+    "id": "7176-88083-0026",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/7176/88083/7176-88083-0026.flac",
+    "duration": 5.53,
+    "text": "THE DRAG UPON HIS BEAK AND THE LIGHT CHECK UPON HIS WINGS WERE INEXPLICABLE TO HIM AND APPALLING",
+    "stratum": "medium"
+  },
+  {
+    "id": "4970-29095-0028",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0028.flac",
+    "duration": 14.67,
+    "text": "HE DOESN'T SAY BUT IT'S ON THE FRONTIER AND ON THE MAP EVERYTHING BEYOND IT IS MARKED INDIANS AND DESERT AND LOOKS AS DESOLATE AS A WEDNESDAY MEETING HUMPH IT WAS TIME FOR HIM TO DO SOMETHING",
+    "stratum": "long"
+  },
+  {
+    "id": "4970-29095-0010",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/4970/29095/4970-29095-0010.flac",
+    "duration": 2.64,
+    "text": "THEE STUDY MEDICINE",
+    "stratum": "short"
+  },
+  {
+    "id": "1580-141083-0016",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/1580/141083/1580-141083-0016.flac",
+    "duration": 4.255,
+    "text": "I WAS IN SUCH A HURRY TO COME TO YOU YOU LEFT YOUR DOOR OPEN",
+    "stratum": "short"
+  },
+  {
+    "id": "8224-274381-0015",
+    "path": "D:/Projects/inference/inference-speech model/data/LibriSpeech/test-clean/8224/274381/8224-274381-0015.flac",
+    "duration": 12.655,
+    "text": "THOUGH THE DISCIPLINE OF THE FORMER PARLIAMENTARY ARMY WAS NOT CONTEMPTIBLE A MORE EXACT PLAN WAS INTRODUCED AND RIGOROUSLY EXECUTED BY THESE NEW COMMANDERS",
+    "stratum": "long"
+  }
+]

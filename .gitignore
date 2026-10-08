@@ -1,4 +1,7 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 .ipynb_checkpoints/
 bench_results.txt
+data/LibriSpeech/
+data/*.tar.gz
+data/smoke_test_results.json

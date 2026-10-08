@@ -785,6 +785,10 @@ class PhaseAwareSpeechScheduler:
 
         return len(self.queue) > 0 or len(self.active_encode) > 0 or len(self.active_decode) > 0
 
+    def has_work(self) -> bool:
+        """Returns True if there are any queued or active requests."""
+        return len(self.queue) > 0 or len(self.active_encode) > 0 or len(self.active_decode) > 0
+
     def run_until_done(self, max_steps: int = 10000) -> List[DualCacheRequest]:
         """Execute phase-aware loop until queue and active requests are finished."""
         steps = 0

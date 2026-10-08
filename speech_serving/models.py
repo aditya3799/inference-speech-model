@@ -11,7 +11,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple, List, Dict, Any
-from transformers.cache_utils import DynamicCache, DynamicLayer
+from transformers.cache_utils import DynamicCache, DynamicLayer, EncoderDecoderCache
+from transformers import WhisperForConditionalGeneration
 
 
 class MultiCodebookEmbedding(nn.Module):
@@ -400,3 +401,115 @@ class WhisperClassSpeechEncoderDecoderModel(nn.Module):
                 self.past_key_values = past_key_values
 
         return ModelOutput(logits, out_cache if use_cache else None)
+
+
+class PretrainedWhisperModel(nn.Module):
+    """
+    Pretrained Hugging Face Whisper model wrapper integrated with PhaseAwareSpeechScheduler
+    and DualCacheManager.
+
+    Precomputes and caches decoder cross-attention key/value projections during the encode phase,
+    enabling non-causal audio prefix reuse across requests without re-running the Whisper encoder
+    or recomputing cross-attention projections.
+    """
+
+    def __init__(
+        self,
+        model_name_or_path: str = "openai/whisper-base",
+        device: str = "cuda",
+        dtype: torch.dtype = torch.float16,
+    ):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        self.hf_model = WhisperForConditionalGeneration.from_pretrained(
+            model_name_or_path,
+            torch_dtype=dtype,
+        ).to(device).eval()
+        self.config = self.hf_model.config
+        self.num_encoder_layers = self.config.encoder_layers
+        self.num_decoder_layers = self.config.decoder_layers
+        self.num_heads = self.config.decoder_attention_heads
+        self.head_dim = self.config.d_model // self.num_heads
+        self.hidden_dim = self.config.d_model
+        self.vocab_size = self.config.vocab_size
+
+        # Compatibility attributes for DualCacheManager and BlockManager
+        self.config.encoder_num_layers = self.num_encoder_layers
+        self.config.decoder_num_layers = self.num_decoder_layers
+        self.config.num_attention_heads = self.num_heads
+        self.config.num_key_value_heads = self.num_heads
+        self.config.hidden_size = self.hidden_dim
+        self.config.vocab_size = self.vocab_size
+
+        # Precompute Whisper suppress_tokens mask for exact parity with HF generate
+        suppress = getattr(self.config, "suppress_tokens", None)
+        if suppress:
+            mask = torch.zeros(self.vocab_size, dtype=torch.bool, device=device)
+            mask[suppress] = True
+            self.register_buffer("suppress_mask", mask)
+        else:
+            self.suppress_mask = None
+
+    def encode(self, mel_features: torch.Tensor) -> Tuple[torch.Tensor, List[Tuple[torch.Tensor, torch.Tensor]]]:
+        """
+        Encode audio features and precompute cross-attention KV projections for all decoder layers.
+        Args:
+            mel_features: [batch_size, 80, mel_len]
+        Returns:
+            encoder_hidden: [batch_size, enc_seq_len, hidden_dim]
+            encoder_kv_list: List of (K, V) tuples per decoder layer [batch_size, num_heads, enc_seq_len, head_dim]
+        """
+        enc_out = self.hf_model.model.encoder(mel_features).last_hidden_state
+        encoder_kv_list = []
+        bsz, src_len, _ = enc_out.shape
+        for layer in self.hf_model.model.decoder.layers:
+            k = layer.encoder_attn.k_proj(enc_out).view(bsz, src_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
+            v = layer.encoder_attn.v_proj(enc_out).view(bsz, src_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
+            encoder_kv_list.append((k, v))
+        return enc_out, encoder_kv_list
+
+    def decode_step(
+        self,
+        input_ids: torch.Tensor,
+        past_key_values: Optional[Any] = None,
+        encoder_past_kv_list: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
+        use_cache: bool = True,
+    ) -> Any:
+        """
+        Autoregressive decode step using cached cross-attention and causal self-attention.
+        """
+        batch_size = input_ids.shape[0]
+        enc_len = encoder_past_kv_list[0][0].shape[2] if encoder_past_kv_list is not None else 1500
+        dummy_enc = torch.empty((batch_size, enc_len, self.hidden_dim), device=input_ids.device, dtype=self.dtype)
+
+        cross_cache = DynamicCache()
+        if encoder_past_kv_list is not None:
+            for l in range(len(encoder_past_kv_list)):
+                k, v = encoder_past_kv_list[l]
+                cross_cache.update(k, v, layer_idx=l)
+
+        self_cache = past_key_values if past_key_values is not None else DynamicCache()
+        enc_dec_cache = EncoderDecoderCache(self_cache, cross_cache)
+        for l in range(len(cross_cache.layers)):
+            enc_dec_cache.is_updated[l] = True
+
+        out = self.hf_model.model.decoder(
+            input_ids=input_ids,
+            encoder_hidden_states=dummy_enc,
+            past_key_values=enc_dec_cache,
+            use_cache=use_cache,
+        )
+        logits = self.hf_model.proj_out(out.last_hidden_state)
+        if self.suppress_mask is not None:
+            logits = logits.masked_fill(self.suppress_mask.unsqueeze(0).unsqueeze(0), -float("inf"))
+
+        class ModelOutput:
+            def __init__(self, logits, past_key_values):
+                self.logits = logits
+                self.past_key_values = past_key_values
+
+        return ModelOutput(logits, out.past_key_values.self_attention_cache if use_cache else None)
