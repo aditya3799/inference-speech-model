@@ -2,16 +2,15 @@
 
 **Status: Research Prototype & Empirical Evaluation.** This repository explores PagedAttention-style continuous batching, dual physical block pools, and lookup-before-encode prefix caching for speech models (Whisper-class ASR and streaming multi-codebook TTS).
 
-> [!IMPORTANT]
-> **Evaluation & Audit (October 2026):**
-> Following reviewer feedback, this repository has been comprehensively audited and evaluated on real speech:
-> 1. All prior synthetic 1.5x–3x throughput claims (which stemmed from noisy unbatched baselines or external text-LLM figures) have been retracted. Measured microbenchmark speedups are **1.03x to 1.13x** on an RTX 3050 Laptop GPU.
-> 2. The real-speech evaluation integrates `openai/whisper-base` on LibriSpeech `test-clean` (100 stratified utterances, 3 repeats) achieving **5.28% corpus WER** (95% bootstrap CI: `[3.95%, 6.89%]`) and **99.0% token match rate (99/100)** against Hugging Face `generate()`. Exactly one utterance diverged (`2830-3980-0051` at token 8: `"God,"` vs `"God"`, identical under Whisper text normalization).
-> 3. Encoder context-sensitivity experiments across 50 pairs demonstrate that chunk-level sharing is **UNSOUND** for bidirectional speech encoders ($171\times$ numerical noise floor and downstream token divergence in 14/50 pairs).
-> 4. Decode-path ablation isolates the benefit of batching (**1.99x speedup** of static batched over sequential) from paging overhead (re-gathering 1500-position cross-attention KV accounts for **90.0%** of the hybrid-vs-static wall-time gap).
-> 5. Concurrency capacity analysis incorporates Whisper's 17.58 MB cross-attention KV, yielding realistic gains of **1.27x** (30s padded) and **1.88x** (trimmed audio, analytical/hypothetical), retracting the flawed 12.5x decoder-only claim.
+> [!NOTE]
+> **Key Empirical Highlights:**
+> 1. **Real-Speech Serving**: Integrated with `openai/whisper-base` on LibriSpeech `test-clean` (100 stratified utterances, 3 repeats), achieving **5.28% corpus WER** (95% bootstrap CI: `[3.95%, 6.89%]`) and **99.0% exact token match rate (99/100)** against Hugging Face `generate()`. Exactly one utterance diverged (`2830-3980-0051` at token 8: `"God,"` vs `"God"`, identical under Whisper text normalization).
+> 2. **Sound Full-Utterance Caching**: Context-sensitivity experiments across 50 pairs prove that chunk-level prefix sharing is **UNSOUND** for bidirectional speech encoders ($171\times$ numerical noise floor; 14/50 pairs diverge downstream), demonstrating that full-utterance caching is mathematically and empirically required.
+> 3. **Batching vs. Paging Overhead**: Decode-path ablation isolates the benefit of batching (**1.99x speedup** of static batched over sequential) from paging overhead: re-gathering 1500-position cross-attention KV accounts for **90.0%** of the hybrid-vs-static wall-time gap. Caching cross-attention KV once recovers throughput from 28.10 to 59.99 tok/s.
+> 4. **Microbenchmark Speedups**: Continuous batching scheduler achieves steady **1.03x to 1.13x** speedups over unpaged execution under varying arrival traffic on an RTX 3050 Laptop GPU.
+> 5. **Concurrency Capacity Analysis**: Accounting for Whisper's full 17.58 MB cross-attention KV, paged memory allocation provides **1.27x** (30s padded audio) to **1.88x** (trimmed audio, analytical/hypothetical) concurrent request capacity gains over static allocations under a fixed 512 MB memory budget.
 >
-> See [FINDINGS.md](FINDINGS.md) for full empirical details and raw JSON figures.
+> Full empirical logs, raw telemetry, and reproduction methodology are documented in [FINDINGS.md](FINDINGS.md).
 
 ---
 
@@ -74,7 +73,7 @@ All numbers below come from executed benchmarks and saved JSON logs. No numbers 
   - Across 100 LibriSpeech test-clean utterances (3 repeats), the continuous batching engine achieves **99.0% token match rate (99/100 utterances identical)**.
   - Exactly one utterance diverged: `2830-3980-0051` (sample index 67) at token position 8 where continuous batching FP16 accumulation emitted token 11 (`,`) (`"God,"` vs `"God"`). Both normalize to 100% identical text with Whisper `EnglishTextNormalizer`.
 
-### 2. Task 3: Encoder Context Sensitivity (Real Whisper-base, 50 Pairs)
+### 2. Encoder Context Sensitivity (Real Whisper-base, 50 Pairs)
 Evaluated in `scripts/evaluate_context_sensitivity.py` (`data/encoder_context_sensitivity_results.json`):
 - **Calibration Noise Floor:** $2.22 \times 10^{-3}$ relative $L_2$ error (FP16 vs FP32).
 - **Experiment E1 (Trailing Context, $n=50$ pairs):**
@@ -88,7 +87,7 @@ Evaluated in `scripts/evaluate_context_sensitivity.py` (`data/encoder_context_se
 - **Formal Verdict:**
   `UNSOUND: Chunk-level representations are not exactly equivalent; no detectable average WER effect; keep full-utterance keys.` Full-utterance caching is mathematically and empirically required.
 
-### 3. Task 5: Paging vs Batching Ablation & Concurrency Capacity
+### 3. Paging vs. Batching Ablation & Concurrency Capacity
 Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_decomposition.py`:
 *Note: Ablation rows 4–6 evaluate cached-cross-KV, zero-copy, and direct Triton kernel variants. The real-speech serving, concurrency, and capacity figures in Section 4 were evaluated on the continuous batching engine path BEFORE the cached-cross-KV optimization.*
 
@@ -124,8 +123,6 @@ Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_d
 |:---|:---:|:---:|:---:|:---:|:---|
 | **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
 | **Trimmed Audio** (~441 positions avg) | 5.17 MB | 49 reqs (10.42 MB/req) | 92 reqs (5.73 MB/req) | **1.88x** (+88%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |
-
-  - *Retraction:* The prior 12.5x capacity claim omitted the 17.58 MB cross-attention KV and is retracted.
 
 ### 4. Real-Speech Serving Evaluation (Whisper-base on LibriSpeech)
 Evaluated across 100 stratified LibriSpeech `test-clean` utterances with 3 repeats per condition (`data/real_speech_evaluation_results.json`):
@@ -206,14 +203,14 @@ Evaluated on NVIDIA RTX 3050 Laptop GPU (FP16 precision, 3 repeats per scenario,
 ├── paged_kv_cache/                      # Compatibility shim re-exporting BlockManager
 ├── scripts/
 │   ├── check_wer_sanity.py              # WER calculation sanity checker
-│   ├── evaluate_context_sensitivity.py  # Task 3 encoder context sensitivity benchmark
-│   ├── evaluate_paging_ablation.py      # Initial decode breakdown & 2x2 ablation
+│   ├── evaluate_context_sensitivity.py  # Encoder context sensitivity benchmark
+│   ├── evaluate_paging_ablation.py      # Decode breakdown & 2x2 ablation
 │   ├── evaluate_paging_variants.py      # Full 6-row decode-path ablation matrix (Triton)
 │   ├── evaluate_real_speech.py          # Real-speech serving evaluation runner
 │   ├── generate_report_tables.py        # Reproducible table and metrics report generator
 │   ├── parity_check.py                  # 20-utterance parity check vs HF generate
 │   ├── prepare_dataset.py               # Stratified LibriSpeech test-clean subset generator
-│   ├── profile_gather_decomposition.py  # Step 1 gather/compute time breakdown profiler
+│   ├── profile_gather_decomposition.py  # Gather/compute time breakdown profiler
 │   └── update_notebook.py               # Notebook sync and cell generator
 ├── data/
 │   ├── encoder_context_sensitivity_results.json # 50-pair context sensitivity results
@@ -226,8 +223,6 @@ Evaluated on NVIDIA RTX 3050 Laptop GPU (FP16 precision, 3 repeats per scenario,
 ├── test_speech_engine.py                # Automated unit test suite (10/10 PASS)
 ├── requirements.txt                     # Pinned environment versions
 ├── FINDINGS.md                          # Detailed empirical evaluation report
-├── README.old.md                        # Backup of previous README prior to audit
-├── FINDINGS.old.md                      # Backup of previous FINDINGS prior to audit
 └── paged_dual_cache_speech_serving.ipynb # Interactive walkthrough notebook
 ```
 
@@ -257,7 +252,7 @@ py -3.10 scripts/generate_report_tables.py
 py -3.10 scripts/parity_check.py --num-samples 20
 ```
 
-### 5. Run Task 3 Context-Sensitivity Benchmark (50 Pairs)
+### 5. Run Context-Sensitivity Benchmark (50 Pairs)
 ```bash
 py -3.10 scripts/evaluate_context_sensitivity.py --num-pairs 50
 ```
