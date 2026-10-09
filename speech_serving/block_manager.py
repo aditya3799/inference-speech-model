@@ -63,6 +63,8 @@ class BlockManager:
         if block_size <= 0:
             raise ValueError(f"block_size must be > 0, got {block_size}")
 
+        if isinstance(dtype, str):
+            dtype = getattr(torch, dtype)
         self.num_layers = num_layers
         self.num_kv_heads = num_kv_heads
         self.head_dim = head_dim

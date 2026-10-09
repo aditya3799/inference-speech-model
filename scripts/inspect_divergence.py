@@ -1,3 +1,8 @@
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import json
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 

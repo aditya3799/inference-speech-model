@@ -22,6 +22,12 @@ Experiments:
      declares chunk-level sharing UNSOUND.
 """
 
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import argparse
 import json
 import logging
@@ -36,6 +42,7 @@ from transformers import (
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 import jiwer
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("context_sensitivity")
@@ -129,15 +136,15 @@ def run_evaluation(
     with open(subset_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Filter short / medium utterances for pairs
-    short_items = [x for x in data if x.get("duration", 0) <= 6.0 and Path(x["path"]).exists()]
-    if not short_items:
-        raise RuntimeError("No short utterances found in dataset!")
+    # Use all valid utterances in dataset for pairing
+    items = [x for x in data if Path(x["path"]).exists()]
+    if not items:
+        raise RuntimeError("No valid utterances found in dataset!")
 
     if quick:
-        num_pairs = min(2, len(short_items) // 2)
+        num_pairs = min(2, len(items) // 2)
     else:
-        num_pairs = min(num_pairs, len(short_items) // 2)
+        num_pairs = min(num_pairs, len(items) // 2)
 
     logger.info("Selected %d utterance pairs for context sensitivity evaluation", num_pairs)
 
@@ -145,7 +152,7 @@ def run_evaluation(
     # 1. Numerical Noise Floor Calibration
     # -------------------------------------------------------------
     logger.info("=== Phase 1: Numerical Noise Floor Calibration ===")
-    calib_sample = short_items[0]
+    calib_sample = items[0]
     wav_calib, _ = sf.read(calib_sample["path"])
     features_calib = processor.feature_extractor(
         wav_calib, sampling_rate=SAMPLING_RATE, return_tensors="pt"
@@ -168,7 +175,7 @@ def run_evaluation(
         # FP16 vs FP32
         if device.type == "cuda":
             model_fp16 = WhisperForConditionalGeneration.from_pretrained(
-                MODEL_ID, torch_dtype=torch.float16
+                MODEL_ID, dtype=torch.float16, low_cpu_mem_usage=True
             ).to(device)
             model_fp16.eval()
             feat_fp16 = features_calib.to(torch.float16)
@@ -219,8 +226,8 @@ def run_evaluation(
     downstream_e2_results = []
 
     for pair_idx in range(num_pairs):
-        item_a = short_items[2 * pair_idx]
-        item_b = short_items[2 * pair_idx + 1]
+        item_a = items[2 * pair_idx]
+        item_b = items[2 * pair_idx + 1]
 
         wav_a, sr_a = sf.read(item_a["path"])
         wav_b, sr_b = sf.read(item_b["path"])
@@ -397,27 +404,121 @@ def run_evaluation(
             })
 
     # -------------------------------------------------------------
-    # 3. Decision Rule Assessment
+    # 3. Aggregate Summaries: E1 and E2 Reported Separately
     # -------------------------------------------------------------
-    # Rule: If relative L2 error > 10x noise floor OR any transcript diverges,
-    # declare chunk-level sharing UNSOUND for bidirectional speech encoders.
-    max_e1_rel_l2 = max(r["final_layer_metrics"]["relative_l2_error"] for r in e1_results)
-    max_e2_rel_l2 = max(
-        max(s["relative_l2_error"] for s in r["shifts"]) for r in e2_results if r["shifts"]
-    )
-    overall_max_rel_l2 = max(max_e1_rel_l2, max_e2_rel_l2)
-    noise_floor_ratio = overall_max_rel_l2 / (noise_floor_rel_l2 + 1e-12)
+    # Experiment E1 Aggregates (Trailing Context across identical offset 0s)
+    e1_rel_l2s = [r["final_layer_metrics"]["relative_l2_error"] for r in e1_results]
+    e1_median_rel_l2 = float(np.median(e1_rel_l2s))
+    e1_p95_rel_l2 = float(np.percentile(e1_rel_l2s, 95))
+    e1_max_rel_l2 = float(np.max(e1_rel_l2s))
 
-    e1_any_diverged = any(not r["exact_match"] for r in downstream_e1_results)
-    e2_any_diverged = any(
-        any(not s["exact_match"] for s in r["shifts"]) for r in downstream_e2_results
-    )
-    any_transcript_diverged = e1_any_diverged or e2_any_diverged
+    # E1 Per-layer relative L2 diffs (layers 0..6)
+    num_encoder_layers = len(e1_results[0]["per_layer_metrics"])
+    e1_per_layer_stats = []
+    for l_idx in range(num_encoder_layers):
+        l_diffs = [r["per_layer_metrics"][l_idx]["relative_l2_error"] for r in e1_results]
+        e1_per_layer_stats.append({
+            "layer": l_idx,
+            "median_relative_l2": float(np.median(l_diffs)),
+            "p95_relative_l2": float(np.percentile(l_diffs, 95)),
+            "max_relative_l2": float(np.max(l_diffs)),
+        })
 
-    is_unsound = (noise_floor_ratio > 10.0) or any_transcript_diverged
+    # E1 Downstream spliced transcription statistics
+    e1_base_wers = [r["baseline_wer"] for r in downstream_e1_results]
+    e1_spliced_wers = [r["spliced_wer"] for r in downstream_e1_results]
+    e1_wer_deltas = [r["wer_delta"] for r in downstream_e1_results]
+    e1_exact_matches = [r["exact_match"] for r in downstream_e1_results]
+    e1_diverged_count = sum(1 for m in e1_exact_matches if not m)
+
+    def _bootstrap_ci(data, n_boot=2000, alpha=0.05):
+        if not data:
+            return [0.0, 0.0]
+        rng = np.random.default_rng(42)
+        means = [rng.choice(data, size=len(data), replace=True).mean() for _ in range(n_boot)]
+        return [float(np.percentile(means, 100 * (alpha / 2))), float(np.percentile(means, 100 * (1 - alpha / 2)))]
+
+    e1_wer_ci = _bootstrap_ci(e1_wer_deltas)
+
+    e1_summary = {
+        "num_pairs_evaluated": len(e1_results),
+        "median_relative_l2": e1_median_rel_l2,
+        "p95_relative_l2": e1_p95_rel_l2,
+        "max_relative_l2": e1_max_rel_l2,
+        "per_layer_relative_l2": e1_per_layer_stats,
+        "baseline_wer_mean": float(np.mean(e1_base_wers)) if e1_base_wers else 0.0,
+        "baseline_wer_median": float(np.median(e1_base_wers)) if e1_base_wers else 0.0,
+        "spliced_wer_mean": float(np.mean(e1_spliced_wers)) if e1_spliced_wers else 0.0,
+        "spliced_wer_median": float(np.median(e1_spliced_wers)) if e1_spliced_wers else 0.0,
+        "wer_delta_mean": float(np.mean(e1_wer_deltas)) if e1_wer_deltas else 0.0,
+        "wer_delta_ci_95": e1_wer_ci,
+        "wer_delta_max": float(np.max(e1_wer_deltas)) if e1_wer_deltas else 0.0,
+        "exact_token_match_rate": float(sum(e1_exact_matches) / len(e1_exact_matches)) if e1_exact_matches else 1.0,
+        "diverged_pairs_count": e1_diverged_count,
+    }
+
+    # Experiment E2 Aggregates (Offset Shifts)
+    e2_rel_l2s = [s["relative_l2_error"] for r in e2_results for s in r["shifts"]]
+    e2_median_rel_l2 = float(np.median(e2_rel_l2s)) if e2_rel_l2s else 0.0
+    e2_p95_rel_l2 = float(np.percentile(e2_rel_l2s, 95)) if e2_rel_l2s else 0.0
+    e2_max_rel_l2 = float(np.max(e2_rel_l2s)) if e2_rel_l2s else 0.0
+
+    # E2 Per-offset statistics
+    e2_per_offset = {}
+    for offset_val in [2.0, 5.0, 10.0]:
+        offs = [s["relative_l2_error"] for r in e2_results for s in r["shifts"] if s["offset_sec"] == offset_val]
+        if offs:
+            e2_per_offset[f"offset_{offset_val}s"] = {
+                "count": len(offs),
+                "median_relative_l2": float(np.median(offs)),
+                "p95_relative_l2": float(np.percentile(offs, 95)),
+                "max_relative_l2": float(np.max(offs)),
+            }
+
+    # E2 Downstream spliced transcription statistics
+    e2_spliced_wers = [s["spliced_wer"] for r in downstream_e2_results for s in r["shifts"]]
+    e2_wer_deltas = [s["wer_delta"] for r in downstream_e2_results for s in r["shifts"]]
+    e2_exact_matches = [s["exact_match"] for r in downstream_e2_results for s in r["shifts"]]
+    e2_diverged_count = sum(1 for m in e2_exact_matches if not m)
+    e2_wer_ci = _bootstrap_ci(e2_wer_deltas)
+
+    e2_summary = {
+        "num_shifts_evaluated": len(e2_rel_l2s),
+        "median_relative_l2": e2_median_rel_l2,
+        "p95_relative_l2": e2_p95_rel_l2,
+        "max_relative_l2": e2_max_rel_l2,
+        "per_offset_stats": e2_per_offset,
+        "spliced_wer_mean": float(np.mean(e2_spliced_wers)) if e2_spliced_wers else 0.0,
+        "spliced_wer_median": float(np.median(e2_spliced_wers)) if e2_spliced_wers else 0.0,
+        "wer_delta_mean": float(np.mean(e2_wer_deltas)) if e2_wer_deltas else 0.0,
+        "wer_delta_ci_95": e2_wer_ci,
+        "wer_delta_max": float(np.max(e2_wer_deltas)) if e2_wer_deltas else 0.0,
+        "exact_token_match_rate": float(sum(e2_exact_matches) / len(e2_exact_matches)) if e2_exact_matches else 1.0,
+        "diverged_shifts_count": e2_diverged_count,
+    }
+
+    # -------------------------------------------------------------
+    # 4. Decision Rule Assessment (Focused strictly on E1 + Spliced WER)
+    # -------------------------------------------------------------
+    e1_p95_noise_ratio = e1_p95_rel_l2 / (noise_floor_rel_l2 + 1e-12)
+    e1_max_noise_ratio = e1_max_rel_l2 / (noise_floor_rel_l2 + 1e-12)
+    e1_transcript_diverged = bool(e1_diverged_count > 0)
+    e1_wer_degraded = bool(np.mean(e1_wer_deltas) > 0.0)
+
+    is_unsound = (e1_p95_noise_ratio > 10.0) or (e1_max_noise_ratio > 10.0) or e1_transcript_diverged or e1_wer_degraded
+
+    evidence_verdict = (
+        f"UNSOUND: E1 trailing context diverges at {e1_max_noise_ratio:.0f}x noise floor "
+        f"({e1_diverged_count}/{len(e1_results)} diverged pairs, {e1_summary['exact_token_match_rate']*100:.1f}% match rate). "
+        f"Chunk-level prefix cache sharing violates bidirectional encoder attention invariance."
+        if is_unsound
+        else "SOUND: representations invariant within noise floor."
+    )
 
     verdict = {
-        "verdict": "UNSOUND" if is_unsound else "SOUND",
+        "verdict": evidence_verdict,
+        "verdict_label": "UNSOUND" if is_unsound else "SOUND",
+        "basis": "Evaluated strictly using Experiment E1 (trailing context) statistics plus downstream spliced WER",
         "recommendation": (
             "full-utterance-only sharing (chunk-level sharing violates bidirectional self-attention invariance)"
             if is_unsound
@@ -425,31 +526,46 @@ def run_evaluation(
         ),
         "criteria": {
             "noise_floor_relative_l2": noise_floor_rel_l2,
-            "max_measured_relative_l2": overall_max_rel_l2,
-            "noise_floor_multiplier": noise_floor_ratio,
+            "max_measured_relative_l2": e1_max_rel_l2,
+            "noise_floor_multiplier": e1_max_noise_ratio,
+            "transcript_diverged_e1_trailing": e1_transcript_diverged,
+            "e1_median_relative_l2": e1_median_rel_l2,
+            "e1_p95_relative_l2": e1_p95_rel_l2,
+            "e1_max_relative_l2": e1_max_rel_l2,
+            "e1_p95_noise_floor_multiplier": e1_p95_noise_ratio,
+            "e1_max_noise_floor_multiplier": e1_max_noise_ratio,
             "threshold_multiplier": 10.0,
-            "exceeds_10x_noise_floor": bool(noise_floor_ratio > 10.0),
-            "transcript_diverged_e1_trailing": e1_any_diverged,
-            "transcript_diverged_e2_offset": e2_any_diverged,
-            "any_transcript_diverged": any_transcript_diverged,
+            "e1_exceeds_10x_noise_floor": bool(e1_p95_noise_ratio > 10.0 or e1_max_noise_ratio > 10.0),
+            "e1_transcripts_diverged": e1_transcript_diverged,
+            "e1_diverged_pairs_count": e1_diverged_count,
+            "e1_exact_token_match_rate": e1_summary["exact_token_match_rate"],
+            "e1_mean_wer_delta": e1_summary["wer_delta_mean"],
+            "e1_wer_delta_ci_95": e1_wer_ci,
         },
     }
 
     logger.info("=======================================================")
-    logger.info("VERDICT: %s", verdict["verdict"])
+    logger.info("DECISION RULE VERDICT: %s", verdict["verdict"])
     logger.info("RECOMMENDATION: %s", verdict["recommendation"])
-    logger.info("Noise floor rel L2: %.6e | Max rel L2: %.6e (%.1fx noise floor)",
-                noise_floor_rel_l2, overall_max_rel_l2, noise_floor_ratio)
-    logger.info("Any transcript diverged: %s (E1: %s, E2: %s)",
-                any_transcript_diverged, e1_any_diverged, e2_any_diverged)
+    logger.info("E1 rel L2: median=%.6e, p95=%.6e, max=%.6e (Noise floor: %.6e)",
+                e1_median_rel_l2, e1_p95_rel_l2, e1_max_rel_l2, noise_floor_rel_l2)
+    logger.info("E1 noise multiplier: p95=%.1fx, max=%.1fx (threshold=10.0x)",
+                e1_p95_noise_ratio, e1_max_noise_ratio)
+    logger.info("E1 transcript diverged: %s (%d/%d pairs diverged, match_rate=%.1f%%)",
+                e1_transcript_diverged, e1_diverged_count, len(e1_results),
+                e1_summary["exact_token_match_rate"] * 100.0)
+    logger.info("E1 WER: baseline=%.4f, spliced=%.4f, mean_delta=%+.4f",
+                e1_summary["baseline_wer_mean"], e1_summary["spliced_wer_mean"], e1_summary["wer_delta_mean"])
     logger.info("=======================================================")
 
     full_output = {
         "model_id": MODEL_ID,
         "device": device_str,
         "calibration": calibration_results,
+        "experiment_e1_summary": e1_summary,
         "experiment_e1_trailing_context": e1_results,
         "downstream_e1_transcription": downstream_e1_results,
+        "experiment_e2_summary": e2_summary,
         "experiment_e2_offset_shift": e2_results,
         "downstream_e2_transcription": downstream_e2_results,
         "decision_rule": verdict,

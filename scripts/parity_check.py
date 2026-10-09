@@ -1,11 +1,19 @@
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import sys
+import gc
+import json
+import time
+import argparse
 from pathlib import Path
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import json
-import time
 import soundfile as sf
 import torch
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -22,7 +30,7 @@ from speech_serving.phase_aware_scheduler import (
 from paged_kv_cache.block_manager import BlockManager
 
 
-def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
+def run_parity_check(dtype_str: str = "float16", num_samples: int = 20):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float32 if dtype_str == "float32" else torch.float16
 
@@ -36,7 +44,7 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
     with open("data/librispeech_subset_100.json", "r", encoding="utf-8") as f:
         subset = json.load(f)[:num_samples]
 
-    # Initialize Engine Model & HF Model
+    # Initialize Engine Model & HF Model sharing weights
     engine_model = PretrainedWhisperModel(
         model_name_or_path="openai/whisper-base",
         device=device,
@@ -44,6 +52,34 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
     )
     hf_model = engine_model.hf_model
 
+    # Allocate physical block pools ONCE outside the loop to avoid continuous reallocation
+    enc_bm = EncoderBlockManager(
+        num_layers=engine_model.num_encoder_layers,
+        num_heads=engine_model.num_heads,
+        head_dim=engine_model.head_dim,
+        block_size=16,
+        num_blocks=256,
+        dtype=dtype,
+        device=device,
+    )
+    dec_bm = BlockManager(
+        num_layers=engine_model.num_decoder_layers,
+        num_kv_heads=engine_model.num_heads,
+        head_dim=engine_model.head_dim,
+        block_size=16,
+        num_blocks=256,
+        dtype=dtype,
+        device=device,
+    )
+    cache_mgr = DualCacheManager(enc_bm, dec_bm)
+    scheduler = PhaseAwareSpeechScheduler(
+        model=engine_model,
+        dual_cache_manager=cache_mgr,
+        eos_token_id=WHISPER_EOS_TOKEN_ID,
+        device=device,
+    )
+
+    prompt_tensor = torch.tensor([WHISPER_DEFAULT_PREFIX_TOKENS], device=device, dtype=torch.long)
     results = []
     exact_matches = 0
 
@@ -67,40 +103,13 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
                 max_new_tokens=50,
             )
         hf_full_tokens = hf_out[0].tolist()
-        # Prompt prefix in HF generate output: usually 4 tokens [50258, 50259, 50359, 50363]
         if hf_full_tokens[:4] == WHISPER_DEFAULT_PREFIX_TOKENS:
             hf_gen_tokens = hf_full_tokens[4:]
         else:
             hf_gen_tokens = hf_full_tokens
 
-        # 2. Engine Serving Scheduler
-        enc_bm = EncoderBlockManager(
-            num_layers=engine_model.num_encoder_layers,
-            num_heads=engine_model.num_heads,
-            head_dim=engine_model.head_dim,
-            block_size=16,
-            num_blocks=256,
-            dtype=dtype,
-            device=device,
-        )
-        dec_bm = BlockManager(
-            num_layers=engine_model.num_decoder_layers,
-            num_kv_heads=engine_model.num_heads,
-            head_dim=engine_model.head_dim,
-            block_size=16,
-            num_blocks=256,
-            dtype=dtype,
-            device=device,
-        )
-        cache_mgr = DualCacheManager(enc_bm, dec_bm)
-        scheduler = PhaseAwareSpeechScheduler(
-            model=engine_model,
-            dual_cache_manager=cache_mgr,
-            eos_token_id=WHISPER_EOS_TOKEN_ID,
-            device=device,
-        )
-
-        prompt_tensor = torch.tensor([WHISPER_DEFAULT_PREFIX_TOKENS], device=device, dtype=torch.long)
+        # 2. Engine Serving Scheduler (reuses pool, request blocks freed upon completion)
+        scheduler.completed.clear()
         req_id = scheduler.submit(
             mel_features=mel[0],
             prompt_token_ids=prompt_tensor,
@@ -112,7 +121,7 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
         req = completed[0]
         engine_gen_tokens = list(req.generated_tokens)
 
-        # Standardize EOS handling: HF generate strips EOS, engine appends EOS if generated
+        # Standardize EOS handling
         engine_tokens_no_eos = [t for t in engine_gen_tokens if t != WHISPER_EOS_TOKEN_ID]
         hf_tokens_no_eos = [t for t in hf_gen_tokens if t != WHISPER_EOS_TOKEN_ID]
 
@@ -123,7 +132,6 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
             div_engine_tok = None
             div_hf_tok = None
         else:
-            # Find first divergent token position
             min_len = min(len(engine_tokens_no_eos), len(hf_tokens_no_eos))
             divergence_pos = min_len
             for pos in range(min_len):
@@ -158,6 +166,13 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
 
     match_rate = exact_matches / num_samples * 100.0
     print(f"\nSummary for {dtype_str}: Exact Match = {exact_matches}/{num_samples} ({match_rate:.1f}%)")
+
+    # Clean up GPU resources
+    del scheduler, cache_mgr, enc_bm, dec_bm, engine_model, hf_model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return {
         "dtype": dtype_str,
         "num_samples": num_samples,
@@ -168,8 +183,16 @@ def run_parity_check(dtype_str: str = "float32", num_samples: int = 20):
 
 
 def main():
-    fp32_res = run_parity_check("float32", num_samples=20)
-    fp16_res = run_parity_check("float16", num_samples=20)
+    parser = argparse.ArgumentParser(description="Check exact token parity against Hugging Face generate()")
+    parser.add_argument("--num-samples", type=int, default=20, help="Number of utterances to test (default: 20)")
+    parser.add_argument("--dtype", type=str, default="float16", choices=["float16", "float32", "both"], help="Precision to test (default: float16)")
+    args = parser.parse_args()
+
+    results = {}
+    if args.dtype in ("float16", "both"):
+        results["fp16"] = run_parity_check("float16", num_samples=args.num_samples)
+    if args.dtype in ("float32", "both"):
+        results["fp32"] = run_parity_check("float32", num_samples=args.num_samples)
 
     output = {
         "environment": {
@@ -179,8 +202,7 @@ def main():
             "model": "openai/whisper-base",
             "commit_hash": "e37978b90ca9030d5170a5c07aadb050351a65bb",
         },
-        "fp32": fp32_res,
-        "fp16": fp16_res,
+        **results,
     }
 
     out_path = Path("data/parity_check_results.json")

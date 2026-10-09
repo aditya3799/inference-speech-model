@@ -6,6 +6,12 @@ Provides:
 2. WhisperClassSpeechEncoderDecoderModel: Speech Encoder-Decoder with cross-attention.
 """
 
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import math
 import torch
 import torch.nn as nn
@@ -134,11 +140,23 @@ class DecoderLayer(nn.Module):
         scale = 1.0 / math.sqrt(self.head_dim)
         attn_weights = torch.matmul(q, k.transpose(-2, -1)) * scale
         if attention_mask is not None:
-            if attention_mask.dtype == torch.bool:
-                attn_weights = attn_weights.masked_fill(~attention_mask, min_val)
+            if attention_mask.dim() == 2:
+                attn_mask_4d = attention_mask.unsqueeze(1).unsqueeze(2)
+            elif attention_mask.dim() == 3:
+                attn_mask_4d = attention_mask.unsqueeze(1)
             else:
-                attn_weights = attn_weights + attention_mask.to(dtype=q.dtype)
-        elif self.is_decoder and seq_len > 1:
+                attn_mask_4d = attention_mask
+
+            if attn_mask_4d.dtype == torch.bool:
+                attn_weights = attn_weights.masked_fill(~attn_mask_4d, min_val)
+            elif torch.isin(attn_mask_4d, torch.tensor([0, 1], device=x.device)).all():
+                # Binary padding mask: 1 = attend, 0 = ignore
+                binary_pad = (attn_mask_4d == 0)
+                attn_weights = attn_weights.masked_fill(binary_pad, min_val)
+            else:
+                attn_weights = attn_weights + attn_mask_4d.to(dtype=q.dtype)
+
+        if self.is_decoder and seq_len > 1:
             causal_mask = torch.triu(torch.full((seq_len, k.shape[2]), float("-inf"), device=x.device, dtype=q.dtype), diagonal=1)
             attn_weights = attn_weights + causal_mask
 
@@ -356,7 +374,9 @@ class WhisperClassSpeechEncoderDecoderModel(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
         use_cache: bool = True,
+        **kwargs,
     ) -> Any:
         """
         Single token or prompt decode step with causal self-attention and cross-attention over encoder KV.
@@ -419,12 +439,15 @@ class PretrainedWhisperModel(nn.Module):
         device: str = "cuda",
         dtype: torch.dtype = torch.float16,
     ):
+        if isinstance(dtype, str):
+            dtype = getattr(torch, dtype)
         super().__init__()
         self.device = device
         self.dtype = dtype
         self.hf_model = WhisperForConditionalGeneration.from_pretrained(
             model_name_or_path,
-            torch_dtype=dtype,
+            dtype=dtype,
+            low_cpu_mem_usage=True,
         ).to(device).eval()
         self.config = self.hf_model.config
         self.num_encoder_layers = self.config.encoder_layers
@@ -479,7 +502,9 @@ class PretrainedWhisperModel(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
         use_cache: bool = True,
+        **kwargs,
     ) -> Any:
         """
         Autoregressive decode step using cached cross-attention and causal self-attention.
@@ -503,6 +528,8 @@ class PretrainedWhisperModel(nn.Module):
             input_ids=input_ids,
             encoder_hidden_states=dummy_enc,
             past_key_values=enc_dec_cache,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
             use_cache=use_cache,
         )
         logits = self.hf_model.proj_out(out.last_hidden_state)

@@ -6,6 +6,10 @@ and Phase-Aware Scheduling.
 NOTE: ``paged_kv_cache`` is a local compatibility shim (see ``paged_kv_cache/``
 in the repository root).  No external ``paged_kv_cache`` package is required.
 """
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 from .models import StreamingMultiCodebookTTSModel, WhisperClassSpeechEncoderDecoderModel
 from .tts_engine import StreamingTTSEngine

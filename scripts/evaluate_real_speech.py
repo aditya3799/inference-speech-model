@@ -1,4 +1,8 @@
 import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import sys
 from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -8,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 import json
 import time
 import random
+import gc
 import numpy as np
 import soundfile as sf
 import torch
@@ -15,6 +20,8 @@ import jiwer
 from typing import List, Dict, Any, Tuple, Optional
 import logging
 logging.getLogger("speech_serving").setLevel(logging.ERROR)
+logging.getLogger("SpeechMemoryGuard").setLevel(logging.ERROR)
+logging.getLogger("PhaseAwareSpeechScheduler").setLevel(logging.ERROR)
 from transformers import WhisperProcessor
 from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 
@@ -39,8 +46,8 @@ class RealSpeechBenchmark:
     def __init__(self, device: str = "cuda", dtype: torch.dtype = torch.float16):
         self.device = device
         self.dtype = dtype
-        self.normalizer = BasicTextNormalizer()
         self.processor = WhisperProcessor.from_pretrained("openai/whisper-base")
+        self.normalizer = self.processor.tokenizer.normalize
 
         print("Initializing PretrainedWhisperModel...")
         self.model = PretrainedWhisperModel(
@@ -60,7 +67,7 @@ class RealSpeechBenchmark:
             if sr != 16000:
                 import librosa
                 audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-            mel = self.processor(audio, sampling_rate=16000, return_tensors="pt").input_features[0].to(device=device, dtype=dtype)
+            mel = self.processor(audio, sampling_rate=16000, return_tensors="pt").input_features[0].to(dtype=dtype)
             self.samples.append({
                 "id": item["id"],
                 "duration": item["duration"],
@@ -72,7 +79,7 @@ class RealSpeechBenchmark:
 
         print("Precomputing HF baseline tokens for exact match rate check...")
         for s in self.samples:
-            mel_in = s["mel"].unsqueeze(0)
+            mel_in = s["mel"].unsqueeze(0).to(self.device)
             with torch.no_grad():
                 hf_out = self.model.hf_model.generate(
                     mel_in,
@@ -80,7 +87,7 @@ class RealSpeechBenchmark:
                     do_sample=False,
                     language="en",
                     task="transcribe",
-                    max_new_tokens=50,
+                    max_new_tokens=150,
                 )
             tokens = hf_out[0].tolist()
             if tokens[:4] == WHISPER_DEFAULT_PREFIX_TOKENS:
@@ -88,7 +95,7 @@ class RealSpeechBenchmark:
             tokens = [t for t in tokens if t != WHISPER_EOS_TOKEN_ID]
             s["hf_tokens"] = tokens
 
-    def run_sequential(self, traffic: List[Dict[str, Any]], max_new_tokens: int = 50) -> Dict[str, Any]:
+    def run_sequential(self, traffic: List[Dict[str, Any]], max_new_tokens: int = 150) -> Dict[str, Any]:
         """System 1: Sequential processing (one request at a time)."""
         torch.cuda.reset_peak_memory_stats()
         t_bench_start = sync_time()
@@ -105,7 +112,7 @@ class RealSpeechBenchmark:
 
             t_req_start = sync_time()
             s_data = self.samples[req["sample_idx"]]
-            mel_in = s_data["mel"].unsqueeze(0)
+            mel_in = s_data["mel"].unsqueeze(0).to(self.device)
 
             # 1. Encode
             with torch.no_grad():
@@ -158,10 +165,12 @@ class RealSpeechBenchmark:
         wall_time = t_bench_end - t_bench_start
         peak_alloc = torch.cuda.max_memory_allocated() / (1024 * 1024)
         peak_res = torch.cuda.max_memory_reserved() / (1024 * 1024)
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
 
-    def run_static_batching(self, traffic: List[Dict[str, Any]], batch_size: int = 4, max_new_tokens: int = 50) -> Dict[str, Any]:
+    def run_static_batching(self, traffic: List[Dict[str, Any]], batch_size: int = 4, max_new_tokens: int = 150) -> Dict[str, Any]:
         """System 2: Static batching (fixed batch size, padded decode, waits for slowest)."""
         torch.cuda.reset_peak_memory_stats()
         t_bench_start = sync_time()
@@ -190,7 +199,7 @@ class RealSpeechBenchmark:
             t_batch_start = sync_time()
 
             # 1. Encode batch
-            b_mels = torch.stack([self.samples[r["sample_idx"]]["mel"] for r in batch_reqs], dim=0)
+            b_mels = torch.stack([self.samples[r["sample_idx"]]["mel"] for r in batch_reqs], dim=0).to(self.device)
             with torch.no_grad():
                 enc_out, enc_kv = self.model.encode(b_mels)
 
@@ -257,6 +266,8 @@ class RealSpeechBenchmark:
         wall_time = t_bench_end - t_bench_start
         peak_alloc = torch.cuda.max_memory_allocated() / (1024 * 1024)
         peak_res = torch.cuda.max_memory_reserved() / (1024 * 1024)
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
 
@@ -264,7 +275,7 @@ class RealSpeechBenchmark:
         self,
         traffic: List[Dict[str, Any]],
         max_batch_size: int = 4,
-        max_new_tokens: int = 50,
+        max_new_tokens: int = 150,
         retain_encoder_cache: bool = False,
     ) -> Dict[str, Any]:
         """System 3: Engine (continuous batching + paged dual cache)."""
@@ -275,7 +286,7 @@ class RealSpeechBenchmark:
             num_heads=self.model.num_heads,
             head_dim=self.model.head_dim,
             block_size=16,
-            num_blocks=2048,
+            num_blocks=6144,
             dtype=self.dtype,
             device=self.device,
         )
@@ -284,7 +295,7 @@ class RealSpeechBenchmark:
             num_kv_heads=self.model.num_heads,
             head_dim=self.model.head_dim,
             block_size=16,
-            num_blocks=2048,
+            num_blocks=1024,
             dtype=self.dtype,
             device=self.device,
         )
@@ -295,6 +306,7 @@ class RealSpeechBenchmark:
             max_batch_size=max_batch_size,
             retain_encoder_cache=retain_encoder_cache,
             eos_token_id=WHISPER_EOS_TOKEN_ID,
+            max_cached_encoder_inputs=100,
             device=self.device,
         )
 
@@ -311,7 +323,7 @@ class RealSpeechBenchmark:
                 r = requests_sorted[q_idx]
                 s_data = self.samples[r["sample_idx"]]
                 req_id = scheduler.submit(
-                    mel_features=s_data["mel"],
+                    mel_features=s_data["mel"].to(self.device),
                     prompt_token_ids=prompt_tensor,
                     max_new_tokens=max_new_tokens,
                     arrival_time=r["arrival_time"],
@@ -361,6 +373,10 @@ class RealSpeechBenchmark:
             "encoder_calls_skipped": scheduler.encoder_calls_skipped,
             "encode_time_saved_s": scheduler.encode_time_saved_s,
         }
+        metrics["concurrency_stats"] = scheduler.get_concurrency_stats()
+        del scheduler, cache_mgr, enc_bm, dec_bm
+        gc.collect()
+        torch.cuda.empty_cache()
         return metrics
 
     def _compute_metrics(
@@ -385,9 +401,25 @@ class RealSpeechBenchmark:
         for r in per_request:
             hyp_text = self.processor.tokenizer.decode(r["gen_tokens"])
             norm_hyp = self.normalizer(hyp_text)
+            r["hyp_text"] = hyp_text
+            r["norm_hyp"] = norm_hyp
             refs.append(r["norm_ref"])
             hyps.append(norm_hyp)
         overall_wer = jiwer.wer(refs, hyps) * 100.0
+
+        # Bootstrap 95% confidence interval for corpus WER
+        wer_ci_95 = [overall_wer, overall_wer]
+        if len(refs) > 1:
+            rng = np.random.RandomState(42)
+            n_boot = 1000
+            idx_arr = np.arange(len(refs))
+            boot_wers = []
+            for _ in range(n_boot):
+                b_idx = rng.choice(idx_arr, size=len(refs), replace=True)
+                b_refs = [refs[i] for i in b_idx]
+                b_hyps = [hyps[i] for i in b_idx]
+                boot_wers.append(jiwer.wer(b_refs, b_hyps) * 100.0)
+            wer_ci_95 = [float(np.percentile(boot_wers, 2.5)), float(np.percentile(boot_wers, 97.5))]
 
         return {
             "num_requests": len(per_request),
@@ -400,6 +432,7 @@ class RealSpeechBenchmark:
             "peak_vram_allocated_mb": peak_alloc_mb,
             "peak_vram_reserved_mb": peak_res_mb,
             "wer_pct": overall_wer,
+            "wer_ci_95": wer_ci_95,
             "token_match_rate_pct": token_match_rate,
             "per_request": per_request,
         }
@@ -494,6 +527,8 @@ def run_benchmark_suite(
             print(f"\n--- System: {sys_name} ({num_repeats} repeats) ---")
             repeat_runs = []
             for rep in range(num_repeats):
+                gc.collect()
+                torch.cuda.empty_cache()
                 print(f"  [Repeat {rep+1}/{num_repeats}] running {sys_name} on {prof_name}...", end="", flush=True)
                 if sys_name == "sequential":
                     run_res = bench.run_sequential(traffic_data)
@@ -502,7 +537,7 @@ def run_benchmark_suite(
                 elif sys_name == "engine":
                     run_res = bench.run_engine(traffic_data, max_batch_size=batch_size, retain_encoder_cache=False)
 
-                print(f" Done in {run_res['wall_time_s']:.2f}s | Throughput: {run_res['throughput_audio_per_sec']:.2f}x | WER: {run_res['wer_pct']:.2f}% | Lat p50: {run_res['latency_p50_s']:.2f}s")
+                print(f" Done in {run_res['wall_time_s']:.2f}s | Throughput: {run_res['throughput_audio_per_sec']:.2f}x (audio-sec / wall-sec) | WER: {run_res['wer_pct']:.2f}% | Lat p50: {run_res['latency_p50_s']:.2f}s")
                 repeat_runs.append(run_res)
 
             # Compute mean and std across repeats
@@ -511,6 +546,7 @@ def run_benchmark_suite(
                 "wall_time_s_std": float(np.std([r["wall_time_s"] for r in repeat_runs])),
                 "throughput_mean": float(np.mean([r["throughput_audio_per_sec"] for r in repeat_runs])),
                 "throughput_std": float(np.std([r["throughput_audio_per_sec"] for r in repeat_runs])),
+                "throughput_label": "audio-sec / wall-sec (RTF factor x)",
                 "ttft_p50_s_mean": float(np.mean([r["ttft_p50_s"] for r in repeat_runs])),
                 "ttft_p50_s_std": float(np.std([r["ttft_p50_s"] for r in repeat_runs])),
                 "ttft_p95_s_mean": float(np.mean([r["ttft_p95_s"] for r in repeat_runs])),
@@ -524,8 +560,28 @@ def run_benchmark_suite(
                 "peak_vram_res_mb_mean": float(np.mean([r["peak_vram_reserved_mb"] for r in repeat_runs])),
                 "peak_vram_res_mb_std": float(np.std([r["peak_vram_reserved_mb"] for r in repeat_runs])),
                 "wer_pct": repeat_runs[0]["wer_pct"],
+                "wer_ci_95": repeat_runs[0].get("wer_ci_95", [repeat_runs[0]["wer_pct"], repeat_runs[0]["wer_pct"]]),
                 "token_match_rate_pct": repeat_runs[0]["token_match_rate_pct"],
             }
+            if sys_name == "engine" and "concurrency_stats" in repeat_runs[0]:
+                cs0 = repeat_runs[0]["concurrency_stats"]
+                agg["concurrency"] = {
+                    "encoder_pool_blocks": cs0["encoder_pool_blocks"],
+                    "encoder_pool_mb": cs0["encoder_pool_mb"],
+                    "decoder_pool_blocks": cs0["decoder_pool_blocks"],
+                    "decoder_pool_mb": cs0["decoder_pool_mb"],
+                    "total_pool_mb": cs0["total_pool_mb"],
+                    "req_encoder_blocks": cs0["req_encoder_blocks"],
+                    "req_encoder_mb": cs0["req_encoder_mb"],
+                    "req_decoder_blocks": cs0["req_decoder_blocks"],
+                    "req_decoder_mb": cs0["req_decoder_mb"],
+                    "avg_in_flight_mean": float(np.mean([r["concurrency_stats"]["avg_in_flight_requests"] for r in repeat_runs])),
+                    "max_in_flight_max": int(max([r["concurrency_stats"]["max_in_flight_requests"] for r in repeat_runs])),
+                    "queue_wait_time_mean_s": float(np.mean([r["concurrency_stats"]["queue_wait_time_mean_s"] for r in repeat_runs])),
+                    "queue_wait_time_p50_s": float(np.mean([r["concurrency_stats"]["queue_wait_time_p50_s"] for r in repeat_runs])),
+                    "queue_wait_time_p95_s": float(np.mean([r["concurrency_stats"]["queue_wait_time_p95_s"] for r in repeat_runs])),
+                    "rejections_mean": float(np.mean([r["concurrency_stats"]["rejections_per_run"] for r in repeat_runs])),
+                }
             results["systems"][prof_name][sys_name] = {
                 "aggregate": agg,
                 "runs": repeat_runs,
@@ -544,7 +600,7 @@ def run_benchmark_suite(
             print(f"  [Repeat {rep+1}/{num_repeats}] running {cache_mode}...", end="", flush=True)
             run_res = bench.run_engine(rep_traffic, max_batch_size=batch_size, retain_encoder_cache=retain_cache)
             telem = run_res["encoder_telemetry"]
-            print(f" Done in {run_res['wall_time_s']:.2f}s | Encoder calls: {telem['encoder_calls']}, Skipped: {telem['encoder_calls_skipped']}")
+            print(f" Done in {run_res['wall_time_s']:.2f}s | Encoder calls: {telem['encoder_calls']}, Skipped: {telem['encoder_calls_skipped']}, Time saved: {telem['encode_time_saved_s']:.2f}s")
             repeat_runs.append(run_res)
 
         agg = {
@@ -576,7 +632,7 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", type=int, default=3, help="Number of measured repeats per condition (default: 3)")
     parser.add_argument("--num-samples", type=int, default=100, help="Number of utterances to benchmark (default: 100)")
     parser.add_argument("--batch-size", type=int, default=4, help="Max batch size for batching/engine (default: 4)")
-    parser.add_argument("--output", type=str, default="task4_real_speech_results.json", help="Output JSON path")
+    parser.add_argument("--output", type=str, default="data/real_speech_evaluation_results.json", help="Output JSON path")
     parser.add_argument("--quick", action="store_true", help="Quick smoke test (5 samples, 1 repeat)")
     args = parser.parse_args()
 

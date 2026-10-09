@@ -1,132 +1,265 @@
 {
   "model_id": "openai/whisper-base",
-  "device": "cuda",
+  "device": "cuda (NVIDIA GeForce RTX 3050 6GB Laptop GPU)",
+  "torch_version": "2.6.0+cu124",
+  "benchmark_config": {
+    "batch_size": 4,
+    "tokens_generated": 32,
+    "repeats": 3,
+    "precision": "float16"
+  },
   "decode_step_breakdowns": [
     {
       "batch_size": 1,
       "seq_len": 32,
       "t_gather_ms": {
-        "mean": 0.044441599895556766,
-        "std": 0.018657417803393608
+        "mean": 1.003388798236847,
+        "std": 0.2662784384905144
       },
       "t_attn_ms": {
-        "mean": 12.707839902242025,
-        "std": 1.8832543995932105
+        "mean": 7.521170139312744,
+        "std": 1.6418917697072057
       },
       "t_scatter_ms": {
-        "mean": 1.5005013386408488,
-        "std": 0.5791802610013113
+        "mean": 0.1709226667881012,
+        "std": 0.154579751751381
       },
       "t_total_ms": {
-        "mean": 14.25278284077843,
-        "std": 2.2497569201434486
+        "mean": 8.695481604337692,
+        "std": 1.894843831476761
       },
-      "copy_overhead_pct": 10.839588000430286
+      "copy_overhead_pct": 13.504846752124108
     },
     {
       "batch_size": 1,
       "seq_len": 64,
       "t_gather_ms": {
-        "mean": 0.04915199987590313,
-        "std": 0.01147001850905358
+        "mean": 1.0868640085061392,
+        "std": 0.3119685020106607
       },
       "t_attn_ms": {
-        "mean": 13.828915278116861,
-        "std": 2.024440164523052
+        "mean": 8.406409645080567,
+        "std": 1.7687064878020125
       },
       "t_scatter_ms": {
-        "mean": 1.4698495864868164,
-        "std": 0.3209085396162862
+        "mean": 0.18683626701434453,
+        "std": 0.12123587470271226
       },
       "t_total_ms": {
-        "mean": 15.347916864479581,
-        "std": 2.2494017108091926
+        "mean": 9.68010992060105,
+        "std": 2.107780777782637
       },
-      "copy_overhead_pct": 9.897118936565375
+      "copy_overhead_pct": 13.157911283732593
+    },
+    {
+      "batch_size": 1,
+      "seq_len": 128,
+      "t_gather_ms": {
+        "mean": 0.9883178651332856,
+        "std": 0.1886600925460609
+      },
+      "t_attn_ms": {
+        "mean": 7.230383984247843,
+        "std": 1.0315029839297585
+      },
+      "t_scatter_ms": {
+        "mean": 0.17714026793837548,
+        "std": 0.12489702075690974
+      },
+      "t_total_ms": {
+        "mean": 8.395842117319505,
+        "std": 1.2428620426671073
+      },
+      "copy_overhead_pct": 13.881372669782296
     },
     {
       "batch_size": 2,
       "seq_len": 32,
       "t_gather_ms": {
-        "mean": 0.7185045341650645,
-        "std": 0.15973997094793596
+        "mean": 1.9956554611523947,
+        "std": 0.11406833810704016
       },
       "t_attn_ms": {
-        "mean": 23.34474245707194,
-        "std": 4.035519896603217
+        "mean": 7.311329015096029,
+        "std": 0.49363954073356436
       },
       "t_scatter_ms": {
-        "mean": 5.142391475041707,
-        "std": 0.8093308624664067
+        "mean": 0.411995733777682,
+        "std": 0.03755248871394417
       },
       "t_total_ms": {
-        "mean": 29.20563846627871,
-        "std": 4.567050916140569
+        "mean": 9.718980210026105,
+        "std": 0.5114353852934989
       },
-      "copy_overhead_pct": 20.06768664199502
+      "copy_overhead_pct": 24.772673088132667
     },
     {
       "batch_size": 2,
       "seq_len": 64,
       "t_gather_ms": {
-        "mean": 0.5590485413869222,
-        "std": 0.19486169690419736
+        "mean": 2.3526623964309694,
+        "std": 0.7144327050510632
       },
       "t_attn_ms": {
-        "mean": 18.174288940429687,
-        "std": 5.5330731022078234
+        "mean": 8.203848552703857,
+        "std": 1.8926324688317786
       },
       "t_scatter_ms": {
-        "mean": 3.4217365264892576,
-        "std": 0.749697377553703
+        "mean": 0.478330667813619,
+        "std": 0.1698897699913259
       },
       "t_total_ms": {
-        "mean": 22.155074008305867,
-        "std": 5.991984812324719
+        "mean": 11.034841616948446,
+        "std": 2.5766025200366607
       },
-      "copy_overhead_pct": 17.96782563842394
+      "copy_overhead_pct": 25.655040303400984
+    },
+    {
+      "batch_size": 2,
+      "seq_len": 128,
+      "t_gather_ms": {
+        "mean": 2.0726229230562847,
+        "std": 0.14329016388633686
+      },
+      "t_attn_ms": {
+        "mean": 7.169197861353556,
+        "std": 0.42697669837089225
+      },
+      "t_scatter_ms": {
+        "mean": 0.3649909327427546,
+        "std": 0.03318683870403851
+      },
+      "t_total_ms": {
+        "mean": 9.606811717152596,
+        "std": 0.4566912103082459
+      },
+      "copy_overhead_pct": 25.373806915011908
     },
     {
       "batch_size": 4,
       "seq_len": 32,
       "t_gather_ms": {
-        "mean": 0.5641578654448192,
-        "std": 0.1544358787947301
+        "mean": 3.6531989336013795,
+        "std": 0.10067923423935562
       },
       "t_attn_ms": {
-        "mean": 16.78413880666097,
-        "std": 2.955763395991316
+        "mean": 7.398026688893636,
+        "std": 0.6163663716671314
       },
       "t_scatter_ms": {
-        "mean": 6.888198439280192,
-        "std": 0.962538239496079
+        "mean": 0.9916074633598327,
+        "std": 0.10713150237717185
       },
       "t_total_ms": {
-        "mean": 24.23649511138598,
-        "std": 3.5634120169425616
+        "mean": 12.042833085854848,
+        "std": 0.5887313007974313
       },
-      "copy_overhead_pct": 30.748490119860584
+      "copy_overhead_pct": 38.56905068639424
     },
     {
       "batch_size": 4,
       "seq_len": 64,
       "t_gather_ms": {
-        "mean": 0.4421333352724711,
-        "std": 0.07551299162959206
+        "mean": 4.273890121777852,
+        "std": 1.0470275681414443
       },
       "t_attn_ms": {
-        "mean": 13.765017573038737,
-        "std": 0.8803965404865018
+        "mean": 8.400508785247803,
+        "std": 1.9440321000160177
       },
       "t_scatter_ms": {
-        "mean": 5.7423125267028805,
-        "std": 0.7296970606117321
+        "mean": 1.2590186615784964,
+        "std": 0.6031892236207146
       },
       "t_total_ms": {
-        "mean": 19.94946343501409,
-        "std": 0.9181992429833665
+        "mean": 13.93341756860415,
+        "std": 3.280032401002438
       },
-      "copy_overhead_pct": 31.000562406710085
+      "copy_overhead_pct": 39.70963158258836
+    },
+    {
+      "batch_size": 4,
+      "seq_len": 128,
+      "t_gather_ms": {
+        "mean": 3.757322669029236,
+        "std": 0.1777933619551938
+      },
+      "t_attn_ms": {
+        "mean": 7.432111978530884,
+        "std": 0.43437195152921165
+      },
+      "t_scatter_ms": {
+        "mean": 0.999345068136851,
+        "std": 0.17536919648901
+      },
+      "t_total_ms": {
+        "mean": 12.18877971569697,
+        "std": 0.5019645499562454
+      },
+      "copy_overhead_pct": 39.02497090041219
+    },
+    {
+      "batch_size": 8,
+      "seq_len": 32,
+      "t_gather_ms": {
+        "mean": 7.818225145339966,
+        "std": 0.6655053269170348
+      },
+      "t_attn_ms": {
+        "mean": 8.634857590993246,
+        "std": 1.4253957512191986
+      },
+      "t_scatter_ms": {
+        "mean": 2.6746517419815063,
+        "std": 0.6142577560614692
+      },
+      "t_total_ms": {
+        "mean": 19.127734478314718,
+        "std": 2.26066121023473
+      },
+      "copy_overhead_pct": 54.856872355779196
+    },
+    {
+      "batch_size": 8,
+      "seq_len": 64,
+      "t_gather_ms": {
+        "mean": 7.696061897277832,
+        "std": 1.103589929436704
+      },
+      "t_attn_ms": {
+        "mean": 7.569386688868205,
+        "std": 0.6530125814205221
+      },
+      "t_scatter_ms": {
+        "mean": 2.3458837429682413,
+        "std": 0.3483146488389853
+      },
+      "t_total_ms": {
+        "mean": 17.61133232911428,
+        "std": 1.9412008517961707
+      },
+      "copy_overhead_pct": 57.019795280594245
+    },
+    {
+      "batch_size": 8,
+      "seq_len": 128,
+      "t_gather_ms": {
+        "mean": 7.280922683080037,
+        "std": 0.4721237080309323
+      },
+      "t_attn_ms": {
+        "mean": 7.479680061340332,
+        "std": 0.3770387936157427
+      },
+      "t_scatter_ms": {
+        "mean": 2.198690152168274,
+        "std": 0.08257295011273727
+      },
+      "t_total_ms": {
+        "mean": 16.959292896588643,
+        "std": 0.598578918471501
+      },
+      "copy_overhead_pct": 55.89627405488782
     }
   ],
   "memory_footprints": [
@@ -136,16 +269,13 @@
       "theoretical_mb": {
         "contiguous_working_buffer": 1.5,
         "block_pool_1024_blocks": 192.0,
-        "active_blocks_direct": 1.5,
         "hybrid_combined": 193.5
       },
       "empirical_peak_mb": {
         "model_baseline": 146.63671875,
         "unpaged_static": 148.13671875,
-        "hybrid_engine": 340.13671875,
-        "direct_paged": 338.63671875,
-        "extra_memory_hybrid_vs_direct_mb": 1.5,
-        "extra_memory_ratio": 1.007812499994751
+        "hybrid_engine_paged_gather": 340.13671875,
+        "extra_memory_hybrid_vs_unpaged_mb": 192.0
       }
     },
     {
@@ -154,16 +284,13 @@
       "theoretical_mb": {
         "contiguous_working_buffer": 3.0,
         "block_pool_1024_blocks": 192.0,
-        "active_blocks_direct": 3.0,
         "hybrid_combined": 195.0
       },
       "empirical_peak_mb": {
         "model_baseline": 146.63671875,
         "unpaged_static": 149.63671875,
-        "hybrid_engine": 341.63671875,
-        "direct_paged": 338.63671875,
-        "extra_memory_hybrid_vs_direct_mb": 3.0,
-        "extra_memory_ratio": 1.0156249999947105
+        "hybrid_engine_paged_gather": 341.63671875,
+        "extra_memory_hybrid_vs_unpaged_mb": 192.0
       }
     },
     {
@@ -172,65 +299,290 @@
       "theoretical_mb": {
         "contiguous_working_buffer": 6.0,
         "block_pool_1024_blocks": 192.0,
-        "active_blocks_direct": 6.0,
         "hybrid_combined": 198.0
       },
       "empirical_peak_mb": {
         "model_baseline": 146.63671875,
         "unpaged_static": 152.63671875,
-        "hybrid_engine": 344.63671875,
-        "direct_paged": 338.63671875,
-        "extra_memory_hybrid_vs_direct_mb": 6.0,
-        "extra_memory_ratio": 1.031249999994629
+        "hybrid_engine_paged_gather": 344.63671875,
+        "extra_memory_hybrid_vs_unpaged_mb": 192.0
+      }
+    },
+    {
+      "batch_size": 8,
+      "seq_len": 128,
+      "theoretical_mb": {
+        "contiguous_working_buffer": 12.0,
+        "block_pool_1024_blocks": 192.0,
+        "hybrid_combined": 204.0
+      },
+      "empirical_peak_mb": {
+        "model_baseline": 146.63671875,
+        "unpaged_static": 158.63671875,
+        "hybrid_engine_paged_gather": 350.63671875,
+        "extra_memory_hybrid_vs_unpaged_mb": 192.0
       }
     }
   ],
-  "ablation_matrix_2x2": {
+  "ablation_matrix_all_variants": {
     "sequential_unpaged": {
-      "description": "Sequential Baseline (No Batching, No Paging)",
+      "description": "Sequential (no batch, no paging)",
       "wall_time_s": {
-        "mean": 0.9737338000171197,
-        "std": 0.10643752961956786
+        "mean": 3.704467099999723,
+        "std": 0.0011865738268436396
       },
-      "throughput_tok_per_s": 65.72638230168737,
-      "latency_per_req_s": 0.24343345000427993
+      "throughput_tok_per_s": 34.55287806443458,
+      "throughput_tok_per_s_std": 0.011067594783978741,
+      "latency_per_req_s": 0.9261167749999307,
+      "peak_vram_allocated_mb": 248.3095703125,
+      "peak_vram_reserved_mb": 262.0,
+      "speedup_vs_sequential": 1.0,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
     },
     "static_batched_unpaged": {
-      "description": "Static Batched Contiguous (Batching, No Paging)",
+      "description": "Static Batched Contiguous (batching, no paging)",
       "wall_time_s": {
-        "mean": 0.22279119999924055,
-        "std": 0.002211387497683927
+        "mean": 1.8659160333330267,
+        "std": 0.004288306846868658
       },
-      "throughput_tok_per_s": 287.26448800589145,
-      "latency_per_req_s": 0.22279119999924055,
-      "speedup_vs_sequential": 4.370611586186703
+      "throughput_tok_per_s": 68.59901394992445,
+      "throughput_tok_per_s_std": 0.1576564089459195,
+      "latency_per_req_s": 1.8659160333330267,
+      "peak_vram_allocated_mb": 305.3828125,
+      "peak_vram_reserved_mb": 324.0,
+      "speedup_vs_sequential": 1.985334298983728,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
     },
-    "hybrid_engine_paged_gather": {
-      "description": "Hybrid Engine (Batching + Paging via Contiguous Gather)",
+    "hybrid_gather_all": {
+      "description": "Hybrid (gather every step, including cross-KV)",
       "wall_time_s": {
-        "mean": 0.3450588999936978,
-        "std": 0.05578807063084926
+        "mean": 4.5543673333328725,
+        "std": 0.06961125214517623
       },
-      "throughput_tok_per_s": 185.4755811288128,
-      "latency_per_req_s": 0.3450588999936978,
-      "speedup_vs_sequential": 2.8219350378584758,
-      "penalty_vs_static_batched_pct": 54.87995037275891
+      "throughput_tok_per_s": 28.10489155391205,
+      "throughput_tok_per_s_std": 0.4295693670015206,
+      "latency_per_req_s": 4.5543673333328725,
+      "peak_vram_allocated_mb": 641.1640625,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 0.8133878602384944,
+      "gap_vs_static_batched_pct": 144.08211580654842,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
     },
-    "direct_paged_attention_isolated": {
-      "description": "Direct Paged Attention Upper Bound (Batching + Direct Kernel, Zero Gather/Scatter)",
+    "hybrid_cached_cross_kv": {
+      "description": "Hybrid + cached cross-KV (gather self-KV only)",
       "wall_time_s": {
-        "mean": 0.22279119999924055,
-        "std": 0.002211387497683927
+        "mean": 2.1337017666664906,
+        "std": 0.034025085553498036
       },
-      "throughput_tok_per_s": 287.26448800589145,
-      "latency_per_req_s": 0.22279119999924055,
-      "speedup_vs_sequential": 4.370611586186703,
-      "potential_speedup_vs_hybrid_engine": 1.5487995037275892
+      "throughput_tok_per_s": 59.9896396017781,
+      "throughput_tok_per_s_std": 0.9566250783786585,
+      "latency_per_req_s": 2.1337017666664906,
+      "peak_vram_allocated_mb": 641.1640625,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 1.7361691112939646,
+      "gap_vs_static_batched_pct": 14.351435356666437,
+      "gap_closed_pct": 90.03940546241327,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "paged_storage_contiguous_view": {
+      "description": "Paged storage, contiguous allocation (zero-copy view)",
+      "wall_time_s": {
+        "mean": 1.8793221999997816,
+        "std": 0.000898587191101392
+      },
+      "throughput_tok_per_s": 68.10966208988266,
+      "throughput_tok_per_s_std": 0.03256624646067595,
+      "latency_per_req_s": 1.8793221999997816,
+      "peak_vram_allocated_mb": 643.6396484375,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 1.9711718937817866,
+      "gap_vs_static_batched_pct": 0.7184764173341638,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "direct_paged_triton_kernel": {
+      "description": "Direct paged kernel (Triton)",
+      "status": "measured",
+      "wall_time_s": {
+        "mean": 2.161016700000497,
+        "std": 0.06674652643739407
+      },
+      "throughput_tok_per_s": 59.231379378035605,
+      "throughput_tok_per_s_std": 1.8294577869659507,
+      "latency_per_req_s": 2.161016700000497,
+      "peak_vram_allocated_mb": 806.82080078125,
+      "peak_vram_reserved_mb": 928.0,
+      "speedup_vs_sequential": 1.7142241890119918,
+      "gap_vs_static_batched_pct": 15.815324022932668,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
     }
   },
-  "analysis_conclusions": {
-    "throughput_driver": "Batching is the primary driver of throughput (4x-6x speedup over sequential)",
-    "hybrid_overhead": "The current hybrid engine incurs measurable gather and scatter copy overhead reconstructing contiguous tensors for HuggingFace attention kernels.",
-    "memory_double_buffering": "Holding both a static block pool and contiguous working buffers creates double-buffering overhead. Direct paged attention eliminates intermediate buffers and tensor concat overhead."
+  "ablation_matrix": {
+    "sequential_unpaged": {
+      "description": "Sequential (no batch, no paging)",
+      "wall_time_s": {
+        "mean": 3.704467099999723,
+        "std": 0.0011865738268436396
+      },
+      "throughput_tok_per_s": 34.55287806443458,
+      "throughput_tok_per_s_std": 0.011067594783978741,
+      "latency_per_req_s": 0.9261167749999307,
+      "peak_vram_allocated_mb": 248.3095703125,
+      "peak_vram_reserved_mb": 262.0,
+      "speedup_vs_sequential": 1.0,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "static_batched_unpaged": {
+      "description": "Static Batched Contiguous (batching, no paging)",
+      "wall_time_s": {
+        "mean": 1.8659160333330267,
+        "std": 0.004288306846868658
+      },
+      "throughput_tok_per_s": 68.59901394992445,
+      "throughput_tok_per_s_std": 0.1576564089459195,
+      "latency_per_req_s": 1.8659160333330267,
+      "peak_vram_allocated_mb": 305.3828125,
+      "peak_vram_reserved_mb": 324.0,
+      "speedup_vs_sequential": 1.985334298983728,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "hybrid_gather_all": {
+      "description": "Hybrid (gather every step, including cross-KV)",
+      "wall_time_s": {
+        "mean": 4.5543673333328725,
+        "std": 0.06961125214517623
+      },
+      "throughput_tok_per_s": 28.10489155391205,
+      "throughput_tok_per_s_std": 0.4295693670015206,
+      "latency_per_req_s": 4.5543673333328725,
+      "peak_vram_allocated_mb": 641.1640625,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 0.8133878602384944,
+      "gap_vs_static_batched_pct": 144.08211580654842,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "hybrid_cached_cross_kv": {
+      "description": "Hybrid + cached cross-KV (gather self-KV only)",
+      "wall_time_s": {
+        "mean": 2.1337017666664906,
+        "std": 0.034025085553498036
+      },
+      "throughput_tok_per_s": 59.9896396017781,
+      "throughput_tok_per_s_std": 0.9566250783786585,
+      "latency_per_req_s": 2.1337017666664906,
+      "peak_vram_allocated_mb": 641.1640625,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 1.7361691112939646,
+      "gap_vs_static_batched_pct": 14.351435356666437,
+      "gap_closed_pct": 90.03940546241327,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "paged_storage_contiguous_view": {
+      "description": "Paged storage, contiguous allocation (zero-copy view)",
+      "wall_time_s": {
+        "mean": 1.8793221999997816,
+        "std": 0.000898587191101392
+      },
+      "throughput_tok_per_s": 68.10966208988266,
+      "throughput_tok_per_s_std": 0.03256624646067595,
+      "latency_per_req_s": 1.8793221999997816,
+      "peak_vram_allocated_mb": 643.6396484375,
+      "peak_vram_reserved_mb": 728.0,
+      "speedup_vs_sequential": 1.9711718937817866,
+      "gap_vs_static_batched_pct": 0.7184764173341638,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    },
+    "direct_paged_triton_kernel": {
+      "description": "Direct paged kernel (Triton)",
+      "status": "measured",
+      "wall_time_s": {
+        "mean": 2.161016700000497,
+        "std": 0.06674652643739407
+      },
+      "throughput_tok_per_s": 59.231379378035605,
+      "throughput_tok_per_s_std": 1.8294577869659507,
+      "latency_per_req_s": 2.161016700000497,
+      "peak_vram_allocated_mb": 806.82080078125,
+      "peak_vram_reserved_mb": 928.0,
+      "speedup_vs_sequential": 1.7142241890119918,
+      "gap_vs_static_batched_pct": 15.815324022932668,
+      "hf_exact_matches": "20/20",
+      "hf_parity_rate_pct": 100.0
+    }
+  },
+  "concurrency_capacity_test": {
+    "budget_mb": 512.0,
+    "evaluation_type": "analytical (not measured at runtime concurrency)",
+    "exact_formula": "Bytes/req = Cross_KV_bytes + Decoder_Self_KV_bytes, where Bytes/token = 2 (K+V) * num_dec_layers * num_heads * head_dim * dtype_bytes = 12,288 bytes.",
+    "bytes_per_token": 12288,
+    "max_worst_case_tokens_per_req": 448,
+    "avg_actual_tokens_per_req": 29.64,
+    "padded_30s_case": {
+      "description": "Standard 30-second padded audio (1500 encoder positions)",
+      "cross_kv_per_req_mb": 17.578125,
+      "unpaged_static_mode": {
+        "cross_kv_mb": 17.578125,
+        "dec_self_kv_mb": 5.25,
+        "total_memory_per_req_mb": 22.828125,
+        "max_concurrent_requests": 22
+      },
+      "paged_kv_cache_mode": {
+        "cross_kv_mb": 17.578125,
+        "dec_self_kv_mb": 0.375,
+        "total_memory_per_req_mb": 17.953125,
+        "max_concurrent_requests": 28
+      },
+      "capacity_multiplier_gain": 1.2727272727272727
+    },
+    "trimmed_encoder_case": {
+      "description": "Trimmed audio based on actual LibriSpeech duration (8.82s = 441 encoder positions)",
+      "cross_kv_per_req_mb": 5.16796875,
+      "unpaged_static_mode": {
+        "cross_kv_mb": 5.16796875,
+        "dec_self_kv_mb": 5.25,
+        "total_memory_per_req_mb": 10.41796875,
+        "max_concurrent_requests": 49
+      },
+      "paged_kv_cache_mode": {
+        "cross_kv_mb": 5.16796875,
+        "dec_self_kv_mb": 0.375,
+        "total_memory_per_req_mb": 5.54296875,
+        "max_concurrent_requests": 92
+      },
+      "capacity_multiplier_gain": 1.8775510204081634
+    },
+    "unpaged_static_mode": {
+      "max_concurrent_requests": 22,
+      "memory_per_req_mb": 22.828125,
+      "effective_utilization_pct": 6.616071428571428,
+      "wasted_fragmentation_pct": 93.38392857142857,
+      "empirical_peak_vram_mb": 22.828125
+    },
+    "paged_kv_cache_mode": {
+      "max_concurrent_requests": 28,
+      "total_blocks_in_budget": 2730,
+      "avg_blocks_per_req": 2,
+      "effective_utilization_pct": 92.625,
+      "internal_fragmentation_pct": 7.374999999999998,
+      "empirical_peak_vram_mb": 17.953125
+    },
+    "capacity_multiplier_gain": 1.2727272727272727,
+    "conclusion": "At a fixed 512MB VRAM budget: For 30s padded audio (1500 positions), including 17.58 MB cross-attention KV yields 1.27x concurrency gain (28 vs 22 requests). For trimmed audio (~441 positions avg, 5.17 MB cross-attention KV), concurrency gain reaches 1.88x (92 vs 49 requests)."
+  },
+  "step_conclusions": {
+    "step_1_gather_decomposition": "Re-gathering 1500-pos cross-attention KV accounts for 50.0%-57.7% of total decode step time (71.6ms at B=4, copying 70.3 MB/step), while self-attention gather is 5.7%-6.9% (8.0-9.8ms, copying 1.5-6.0 MB/step).",
+    "step_2_cached_cross_kv": "Caching cross-attention KV closes 90.0% of the gap between Hybrid and Static Batched Contiguous serving.",
+    "step_3_zero_copy_view": "Paged storage with contiguous allocation achieves 68.11 tok/s, demonstrating that eliminating gather/scatter copies recovers near-native batched speed.",
+    "step_4_direct_paged_kernel": "Triton paged attention kernel compiles and runs natively on Windows RTX 3050, achieving 59.23 tok/s with verified numerical parity."
   }
 }

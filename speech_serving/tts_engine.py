@@ -6,6 +6,12 @@ Implements autoregressive continuous batching for multi-codebook neural codec au
 Reuses paged_kv_cache.block_manager.BlockManager without modification.
 """
 
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import time
 import torch
 from dataclasses import dataclass, field

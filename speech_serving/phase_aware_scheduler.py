@@ -25,10 +25,17 @@ Shared-block safety: a full-input hash keyed on
 Telemetry added: encoder_calls, encoder_calls_skipped, encode_time_saved_s.
 """
 
+import os
+os.environ["USE_TF"] = "0"
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import time
 import enum
 import torch
 import hashlib
+import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
 from transformers.cache_utils import DynamicCache, DynamicLayer
@@ -97,6 +104,8 @@ class DualCacheRequest:
     cached_decoder_kv: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None
 
     # Timing metrics
+    submission_time: Optional[float] = None
+    queue_wait_time: Optional[float] = None
     start_time: Optional[float] = None
     encode_done_time: Optional[float] = None
     first_token_time: Optional[float] = None
@@ -119,7 +128,7 @@ class PhaseAwareSpeechScheduler:
         verbose: bool = False,
         device: str = "cuda",
         eos_token_id: Optional[int] = None,
-        max_cached_encoder_inputs: int = 32,
+        max_cached_encoder_inputs: int = 100,
     ):
         self.model = model
         self.dual_cache = dual_cache_manager
@@ -141,6 +150,8 @@ class PhaseAwareSpeechScheduler:
         # Concurrency & telemetry tracking
         self.peak_in_flight_requests: int = 0
         self.rejected_requests_count: int = 0
+        self.in_flight_history: List[int] = []
+        self.queue_wait_times: List[float] = []
         self.retained_encoder_caches: Dict[int, Tuple[List[int], float]] = {} # req_id -> (block_table, timestamp)
 
         # Encoder-skip telemetry (Task 2)
@@ -184,14 +195,19 @@ class PhaseAwareSpeechScheduler:
         enc_block_size = self.dual_cache.encoder_bm.block_size
         dec_block_size = self.dual_cache.decoder_bm.block_size
 
+        mel_in = mel_features.unsqueeze(0) if mel_features.dim() == 2 else mel_features
+        full_hash = self._compute_full_input_hash(mel_in) if self.retain_encoder_cache else None
+        is_hit = (full_hash in self._full_input_enc_cache) if (full_hash and self.retain_encoder_cache) else False
+
         mel_len = mel_features.shape[-1] if mel_features.dim() > 1 else mel_features.shape[0]
         # Speech Conv2 stride 2 downsampling: enc_seq_len = (mel_len + 1) // 2
         req_enc_seq_len = (mel_len + 1) // 2
-        req_enc_blocks = (req_enc_seq_len + enc_block_size - 1) // enc_block_size
+        req_enc_blocks = 0 if is_hit else ((req_enc_seq_len + enc_block_size - 1) // enc_block_size)
         req_dec_blocks = (max_new_tokens + dec_block_size - 1) // dec_block_size
 
         queued_enc_blocks = sum(
-            (((r.mel_features.shape[-1] + 1) // 2) + enc_block_size - 1) // enc_block_size
+            0 if (self.retain_encoder_cache and r.full_input_hash and r.full_input_hash in self._full_input_enc_cache)
+            else (((r.mel_features.shape[-1] + 1) // 2) + enc_block_size - 1) // enc_block_size
             for r in self.queue
         )
         queued_dec_blocks = sum(
@@ -254,14 +270,16 @@ class PhaseAwareSpeechScheduler:
             prompt_token_ids=prompt_token_ids.to(self.device),
             max_new_tokens=max_new_tokens,
             arrival_time=arrival_time,
+            submission_time=time.perf_counter(),
             eos_token_id=effective_eos,
+            full_input_hash=full_hash,
         )
         self._next_id += 1
         self.queue.append(req)
         return req.id
 
-    def _evict_retained_encoder_caches(self) -> int:
-        """Evicts oldest retained encoder caches under memory pressure."""
+    def _evict_retained_encoder_caches(self, min_blocks_to_free: int = 1) -> int:
+        """Evicts oldest retained encoder caches under memory pressure until min_blocks_to_free are released."""
         freed = 0
         if not self.retained_encoder_caches and not self._full_input_enc_cache:
             return 0
@@ -270,17 +288,21 @@ class PhaseAwareSpeechScheduler:
             for k in sorted_keys:
                 blk_table, _ = self.retained_encoder_caches.pop(k)
                 freed += self.dual_cache.encoder_bm.release_blocks(blk_table)
+                if min_blocks_to_free > 0 and freed >= min_blocks_to_free:
+                    return freed
         if self._full_input_enc_cache:
             sorted_hashes = sorted(self._full_input_enc_cache.keys(), key=lambda h: self._full_input_enc_cache[h]["last_access_time"])
             for h in sorted_hashes:
                 entry = self._full_input_enc_cache.pop(h)
                 if entry.get("held_by_cache", False):
                     freed += self.dual_cache.encoder_bm.release_blocks(entry["block_table"])
+                if min_blocks_to_free > 0 and freed >= min_blocks_to_free:
+                    return freed
         return freed
 
     def flush_retained_caches(self) -> int:
         """Flushes all retained LRU encoder caches and triggers cleanup telemetry."""
-        freed = self._evict_retained_encoder_caches()
+        freed = self._evict_retained_encoder_caches(min_blocks_to_free=0)
         if freed > 0:
             self.memory_guard.trigger_bulk_eviction_cleanup(freed, reason="flush_retained_caches")
         return freed
@@ -352,7 +374,7 @@ class PhaseAwareSpeechScheduler:
             )
             full_hash = self._compute_full_input_hash(mel_in)
             next_req.full_input_hash = full_hash
-            cache_hit = full_hash in self._full_input_enc_cache
+            cache_hit = (full_hash in self._full_input_enc_cache) if self.retain_encoder_cache else False
 
             # On a hit we need blocks already allocated; no new blocks required.
             blocks_needed_for_admission = 0 if cache_hit else needed_enc_blocks
@@ -368,6 +390,9 @@ class PhaseAwareSpeechScheduler:
 
             req = self.queue.pop(0)
             req.start_time = time.perf_counter()
+            if req.submission_time is not None:
+                req.queue_wait_time = req.start_time - req.submission_time
+                self.queue_wait_times.append(req.queue_wait_time)
             req.phase = RequestPhase.ENCODE_PHASE
 
             try:
@@ -381,9 +406,11 @@ class PhaseAwareSpeechScheduler:
                     enc_seq_len = entry["enc_seq_len"]
                     cached_enc_kv = entry["cached_enc_kv"]
 
-                    # Bump ref-counts for every shared block (do NOT write)
+                    # Bump ref-counts and telemetry for every shared block (do NOT write)
                     for blk_id in cached_block_table:
                         self.dual_cache.encoder_bm.ref_counts[blk_id] += 1
+                        self.dual_cache.encoder_bm.total_lookups += 1
+                        self.dual_cache.encoder_bm.cache_hits += 1
 
                     req.encoder_block_table = list(cached_block_table)
                     req.encoder_seq_len = enc_seq_len
@@ -394,7 +421,8 @@ class PhaseAwareSpeechScheduler:
 
                     # Telemetry
                     self.encoder_calls_skipped += 1
-                    self.encode_time_saved_s += 0.0
+                    saved_t = entry.get("encode_time", 0.0)
+                    self.encode_time_saved_s += saved_t
 
                     if self.verbose:
                         logger.info(
@@ -407,10 +435,15 @@ class PhaseAwareSpeechScheduler:
                     # -------------------------------------------------------
                     # MISS PATH: run encoder, write into fresh blocks
                     # -------------------------------------------------------
+                    if torch.cuda.is_available():
+                        torch.cuda.synchronize()
                     t_enc_start = time.perf_counter()
                     with torch.no_grad():
                         encoder_hidden, encoder_kv_list = self.model.encode(mel_in)
+                    if torch.cuda.is_available():
+                        torch.cuda.synchronize()
                     t_enc_end = time.perf_counter()
+                    enc_time = t_enc_end - t_enc_start
                     self.encoder_calls += 1
 
                     enc_seq_len = encoder_hidden.shape[1]
@@ -455,32 +488,29 @@ class PhaseAwareSpeechScheduler:
 
                     req.cached_encoder_kv = enc_kv_layers
 
-                    # Evict if exceeding bounded cache capacity
-                    while len(self._full_input_enc_cache) >= self.max_cached_encoder_inputs:
-                        oldest_hash = min(
-                            self._full_input_enc_cache.keys(),
-                            key=lambda h: self._full_input_enc_cache[h]["last_access_time"]
-                        )
-                        evicted_entry = self._full_input_enc_cache.pop(oldest_hash)
-                        if evicted_entry.get("held_by_cache", False):
-                            self.dual_cache.encoder_bm.release_blocks(evicted_entry["block_table"])
-
-                    # If retain_encoder_cache is True, cache holds a persistent ref_count
+                    # If retain_encoder_cache is True, store in bounded full-input cache
                     if self.retain_encoder_cache:
                         for blk_id in enc_block_table:
                             self.dual_cache.encoder_bm.ref_counts[blk_id] += 1
                         held_by_cache = True
-                    else:
-                        held_by_cache = False
 
-                    # Store in bounded full-input cache
-                    self._full_input_enc_cache[full_hash] = {
-                        "block_table": list(enc_block_table),
-                        "enc_seq_len": enc_seq_len,
-                        "cached_enc_kv": enc_kv_layers,
-                        "last_access_time": time.perf_counter(),
-                        "held_by_cache": held_by_cache,
-                    }
+                        while len(self._full_input_enc_cache) >= self.max_cached_encoder_inputs:
+                            oldest_hash = min(
+                                self._full_input_enc_cache.keys(),
+                                key=lambda h: self._full_input_enc_cache[h]["last_access_time"]
+                            )
+                            evicted_entry = self._full_input_enc_cache.pop(oldest_hash)
+                            if evicted_entry.get("held_by_cache", False):
+                                self.dual_cache.encoder_bm.release_blocks(evicted_entry["block_table"])
+
+                        self._full_input_enc_cache[full_hash] = {
+                            "block_table": list(enc_block_table),
+                            "enc_seq_len": enc_seq_len,
+                            "cached_enc_kv": enc_kv_layers,
+                            "last_access_time": time.perf_counter(),
+                            "held_by_cache": held_by_cache,
+                            "encode_time": enc_time,
+                        }
 
                     if self.verbose:
                         logger.info(
@@ -615,13 +645,13 @@ class PhaseAwareSpeechScheduler:
 
                 # Decoder self-attention padding mask (key len = max_dec_len + 1 past + current)
                 self_attn_mask = torch.ones(
-                    (batch_size, 1, 1, max_dec_len + 1),
+                    (batch_size, max_dec_len + 1),
                     device=self.device,
-                    dtype=torch.bool,
+                    dtype=torch.long,
                 )
                 for i, req in enumerate(self.active_decode):
                     if req.decoder_seq_len < max_dec_len:
-                        self_attn_mask[i, 0, 0, req.decoder_seq_len:max_dec_len] = False
+                        self_attn_mask[i, req.decoder_seq_len:max_dec_len] = 0
 
         # 4. Build batched encoder past KV cache list (with cross-step batch reuse)
         enc_mask = None
@@ -676,6 +706,11 @@ class PhaseAwareSpeechScheduler:
                 self._cached_enc_mask = enc_mask
 
         # 5. Run single batched forward pass on GPU
+        position_ids = torch.tensor(
+            [[req.decoder_seq_len] for req in self.active_decode],
+            device=self.device,
+            dtype=torch.long,
+        )
         with torch.no_grad():
             dec_out = self.model.decode_step(
                 input_ids=token_in,
@@ -683,6 +718,7 @@ class PhaseAwareSpeechScheduler:
                 encoder_past_kv_list=enc_kv_layers,
                 attention_mask=self_attn_mask,
                 encoder_attention_mask=enc_mask,
+                position_ids=position_ids,
                 use_cache=True,
             )
 
@@ -766,6 +802,7 @@ class PhaseAwareSpeechScheduler:
         in_flight = len(self.active_encode) + len(self.active_decode)
         if in_flight > self.peak_in_flight_requests:
             self.peak_in_flight_requests = in_flight
+        self.in_flight_history.append(in_flight)
 
         if self.verbose:
             enc_stats = self.dual_cache.encoder_bm.get_stats()
@@ -795,6 +832,57 @@ class PhaseAwareSpeechScheduler:
         while self.step() and steps < max_steps:
             steps += 1
         return self.completed
+
+    def reset_telemetry(self):
+        """Reset all per-run counters and histories cleanly."""
+        self.encoder_calls = 0
+        self.encoder_calls_skipped = 0
+        self.encode_time_saved_s = 0.0
+        self.rejected_requests_count = 0
+        self.in_flight_history = []
+        self.queue_wait_times = []
+        self.completed = []
+
+    def get_concurrency_stats(self) -> Dict[str, Any]:
+        """Return memory pool sizing, per-request demand, and runtime concurrency statistics."""
+        enc_bm = self.dual_cache.encoder_bm
+        dec_bm = self.dual_cache.decoder_bm
+
+        dtype_bytes = 2 if enc_bm.dtype in (torch.float16, torch.bfloat16) else 4
+        # Encoder KV: 2 * num_layers * num_heads * block_size * head_dim * bytes
+        enc_block_bytes = 2 * enc_bm.num_layers * enc_bm.num_heads * enc_bm.block_size * enc_bm.head_dim * dtype_bytes
+        enc_pool_mb = (enc_bm.num_blocks * enc_block_bytes) / (1024 * 1024)
+
+        # Decoder KV: 2 * num_layers * num_kv_heads * block_size * head_dim * bytes
+        dec_block_bytes = 2 * dec_bm.num_layers * dec_bm.num_kv_heads * dec_bm.block_size * dec_bm.head_dim * dtype_bytes
+        dec_pool_mb = (dec_bm.num_blocks * dec_block_bytes) / (1024 * 1024)
+
+        # Per-request blocks: 30s mel -> 1500 tokens -> 94 blocks; 150 max tokens -> 10 blocks
+        req_enc_blocks = (1500 + enc_bm.block_size - 1) // enc_bm.block_size
+        req_enc_mb = (req_enc_blocks * enc_block_bytes) / (1024 * 1024)
+        req_dec_blocks = (150 + dec_bm.block_size - 1) // dec_bm.block_size
+        req_dec_mb = (req_dec_blocks * dec_block_bytes) / (1024 * 1024)
+
+        q_waits = self.queue_wait_times if self.queue_wait_times else [0.0]
+        in_flights = self.in_flight_history if self.in_flight_history else [0]
+
+        return {
+            "encoder_pool_blocks": enc_bm.num_blocks,
+            "encoder_pool_mb": enc_pool_mb,
+            "decoder_pool_blocks": dec_bm.num_blocks,
+            "decoder_pool_mb": dec_pool_mb,
+            "total_pool_mb": enc_pool_mb + dec_pool_mb,
+            "req_encoder_blocks": req_enc_blocks,
+            "req_encoder_mb": req_enc_mb,
+            "req_decoder_blocks": req_dec_blocks,
+            "req_decoder_mb": req_dec_mb,
+            "avg_in_flight_requests": float(np.mean(in_flights)),
+            "max_in_flight_requests": int(max(in_flights)),
+            "queue_wait_time_mean_s": float(np.mean(q_waits)),
+            "queue_wait_time_p50_s": float(np.percentile(q_waits, 50)),
+            "queue_wait_time_p95_s": float(np.percentile(q_waits, 95)),
+            "rejections_per_run": self.rejected_requests_count,
+        }
 
     def get_encoder_telemetry(self) -> Dict[str, Any]:
         """
@@ -835,4 +923,5 @@ class PhaseAwareSpeechScheduler:
                 self.dual_cache.encoder_bm.release_blocks(entry["block_table"])
         self._full_input_enc_cache.clear()
         return count
+
 

@@ -31,6 +31,8 @@ class EncoderBlockManager:
         dtype: torch.dtype = torch.float16,
         device: str = "cuda",
     ):
+        if isinstance(dtype, str):
+            dtype = getattr(torch, dtype)
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.head_dim = head_dim
