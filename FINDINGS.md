@@ -19,11 +19,11 @@
    - On 20 LibriSpeech test-clean utterances (`data/parity_check_results.json`), single-stream greedy decoding achieved **100.0% Exact Token Match (20/20)** in both FP32 and FP16 with Hugging Face `generate()`.
    - On the 100-utterance continuous batching serving run (`data/real_speech_evaluation_results.json`), the token match rate is **99.0% (99/100 utterances identical)** across all 3 repeats. Exactly one utterance diverged: `2830-3980-0051` (sample index 67), where continuous batching FP16 accumulation at token position 8 emitted token 11 (`,`) (`"God,"` vs `"God"`). Both normalize to 100% identical text with Whisper `EnglishTextNormalizer`.
 
-3. **Chunk-Level KV Sharing Is Formally UNSOUND for Bidirectional Encoders (Task 3):**
+3. **Encoder Context Sensitivity & Full-Utterance Caching (Task 3):**
    - Evaluated across 50 LibriSpeech utterance pairs (`data/encoder_context_sensitivity_results.json`). Calibration established a numerical noise floor of $2.22 \times 10^{-3}$ relative $L_2$ error (FP16 vs FP32).
    - In Experiment E1 (trailing context effect, $n=50$ pairs), **14 / 50 pairs diverged** at the token level (**72.0%** exact token match rate). Relative $L_2$ error: median = **0.1914** ($86.1\times$ noise floor), p95 = **0.3197** ($143.8\times$ noise floor), max = **0.3799** ($170.8\times$ noise floor). Mean spliced WER delta: **+0.0009** (95% bootstrap CI: `[-0.0067, +0.0092]`).
    - In Experiment E2 (offset shifts, $n=148$ shifts across 2s, 5s, 10s), **46 / 148 shifts diverged** at the token level (**68.9%** exact token match rate). Relative $L_2$ error: median = **0.8540** ($384.0\times$ noise floor), p95 = **0.9956** ($447.6\times$ noise floor), max = **1.0067** ($452.6\times$ noise floor). Mean spliced WER delta: **+0.0074** (95% bootstrap CI: `[-0.0040, +0.0230]`).
-   - **Verdict:** Chunk-level sharing is **UNSOUND**. Representations are not exactly equivalent; no detectable average WER effect; keep full-utterance keys.
+   - **Verdict:** Chunk-level sharing is not exactly equivalent (E1: 14/50 pairs diverge at token level; E2: 46/148), with no detectable average WER effect (spliced WER delta CIs include zero), so the engine hashes full utterances.
 
 4. **Batching Drives Throughput; Cross-KV Gather Accounts for 90% of the Paging Gap (Task 5):**
    - Static batched contiguous decoding provides a **1.99x speedup** over sequential decoding (68.60 tok/s vs 34.55 tok/s at B=4, 32 tokens, from `data/paging_ablation_results.json`).
@@ -70,8 +70,8 @@ Evaluated in `scripts/evaluate_context_sensitivity.py` (`data/encoder_context_se
   - Token-level divergence: **46 / 148 shifts diverged** (exact match rate: **68.9%**).
   - Relative $L_2$ error: Median = **0.8540** ($384.0\times$ noise floor), p95 = **0.9956** ($447.6\times$ noise floor), Max = **1.0067** ($452.6\times$ noise floor).
   - Downstream Transcription: Mean spliced WER delta = **+0.0074** (95% bootstrap CI: `[-0.0040, +0.0230]`).
-- **Formal Verdict:**
-  `UNSOUND: Chunk-level representations are not exactly equivalent; no detectable average WER effect; keep full-utterance keys.` Full-utterance caching is mathematically and empirically required.
+- **Verdict:**
+  Chunk-level sharing is not exactly equivalent (E1: 14/50 pairs diverge at token level; E2: 46/148), with no detectable average WER effect (spliced WER delta CIs include zero), so the engine hashes full utterances.
 
 ### Task 4: Real-Speech Serving Evaluation (Whisper-base on LibriSpeech)
 Evaluated across 100 stratified LibriSpeech `test-clean` utterances with 3 repeats per condition (`data/real_speech_evaluation_results.json`):
@@ -156,7 +156,7 @@ Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_d
 
 | Audio Representation (Analytical) | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |
 |:---|:---:|:---:|:---:|:---:|:---|
-| **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
+| **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Analytical: derived from allocator sizes, no run at this concurrency (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
 | **Trimmed Audio** (~441 positions avg) | 5.17 MB | 49 reqs (10.42 MB/req) | 89 reqs (5.73 MB/req) | **1.82x** (+82%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |
 
   - *Retraction:* The prior 12.5x capacity claim omitted the 17.58 MB cross-attention KV and is retracted.

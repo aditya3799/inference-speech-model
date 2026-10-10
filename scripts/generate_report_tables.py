@@ -162,7 +162,7 @@ def generate_capacity_table(abl_data):
     lines = []
     lines.append("| Audio Representation (Analytical) | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |")
     lines.append("|:---|:---:|:---:|:---:|:---:|:---|")
-    lines.append(f"| **Standard 30s Padded Audio** (1500 positions) | {p30['cross_kv_per_req_mb']:.2f} MB | {p30['unpaged_static_mode']['max_concurrent_requests']} reqs (22.83 MB/req) | {p30['paged_kv_cache_mode']['max_concurrent_requests']} reqs (18.14 MB/req) | **{p30['capacity_multiplier_gain']:.2f}x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |")
+    lines.append(f"| **Standard 30s Padded Audio** (1500 positions) | {p30['cross_kv_per_req_mb']:.2f} MB | {p30['unpaged_static_mode']['max_concurrent_requests']} reqs (22.83 MB/req) | {p30['paged_kv_cache_mode']['max_concurrent_requests']} reqs (18.14 MB/req) | **{p30['capacity_multiplier_gain']:.2f}x** (+27%) | Analytical: derived from allocator sizes, no run at this concurrency (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |")
     lines.append(f"| **Trimmed Audio** (~441 positions avg) | {trim['cross_kv_per_req_mb']:.2f} MB | {unpaged_trimmed_reqs} reqs ({unpaged_trimmed_mb:.2f} MB/req) | {paged_trimmed_reqs} reqs ({paged_trimmed_mb:.2f} MB/req) | **{gain:.2f}x** (+82%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |")
 
     return "\n".join(lines)
