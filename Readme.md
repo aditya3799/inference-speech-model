@@ -8,7 +8,7 @@
 > 2. **Sound Full-Utterance Caching**: Context-sensitivity experiments across 50 pairs prove that chunk-level prefix sharing is **UNSOUND** for bidirectional speech encoders ($171\times$ numerical noise floor; 14/50 pairs diverge downstream), demonstrating that full-utterance caching is mathematically and empirically required.
 > 3. **Batching vs. Paging Overhead**: Decode-path ablation isolates the benefit of batching (**1.99x speedup** of static batched over sequential) from paging overhead: re-gathering 1500-position cross-attention KV accounts for **90.0%** of the hybrid-vs-static wall-time gap. Caching cross-attention KV once recovers throughput from 28.10 to 59.99 tok/s.
 > 4. **Microbenchmark Speedups**: Continuous batching scheduler achieves steady **1.03x to 1.13x** speedups over unpaged execution under varying arrival traffic on an RTX 3050 Laptop GPU.
-> 5. **Concurrency Capacity Analysis**: Accounting for Whisper's full 17.58 MB cross-attention KV, paged memory allocation provides **1.27x** (30s padded audio) to **1.88x** (trimmed audio, analytical/hypothetical) concurrent request capacity gains over static allocations under a fixed 512 MB memory budget.
+> 5. **Concurrency Capacity Analysis**: Accounting for Whisper's full 17.58 MB cross-attention KV, paged memory allocation provides **1.27x** (30s padded audio) to **1.82x** (trimmed audio, analytical/hypothetical) concurrent request capacity gains over static allocations under a fixed 512 MB memory budget.
 >
 > Full empirical logs, raw telemetry, and reproduction methodology are documented in [FINDINGS.md](FINDINGS.md).
 
@@ -119,10 +119,10 @@ Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_d
 
 - **Analytical Concurrency Capacity Test (Fixed 512 MB Budget):**
 
-| Audio Representation | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |
+| Audio Representation (Analytical) | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |
 |:---|:---:|:---:|:---:|:---:|:---|
 | **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
-| **Trimmed Audio** (~441 positions avg) | 5.17 MB | 49 reqs (10.42 MB/req) | 92 reqs (5.73 MB/req) | **1.88x** (+88%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |
+| **Trimmed Audio** (~441 positions avg) | 5.17 MB | 49 reqs (10.42 MB/req) | 89 reqs (5.73 MB/req) | **1.82x** (+82%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |
 
 ### 4. Real-Speech Serving Evaluation (Whisper-base on LibriSpeech)
 Evaluated across 100 stratified LibriSpeech `test-clean` utterances with 3 repeats per condition (`data/real_speech_evaluation_results.json`):
@@ -131,17 +131,19 @@ Evaluated across 100 stratified LibriSpeech `test-clean` utterances with 3 repea
 - **Corpus WER:** All systems achieved **5.28%** corpus WER, and 95% bootstrap confidence intervals are within 0.1 percentage points of each other (Sequential: `[4.00%, 6.81%]`, Static Batching: `[4.00%, 6.81%]`, Continuous Engine: `[3.95%, 6.89%]`).
 - **Throughput & Latency by Traffic Profile:**
 
-| Traffic Profile | System | Throughput (audio-sec / wall-sec) | Latency p50 (s) | TTFT p50 (s) | Peak VRAM Alloc / Res (MB) | Corpus WER (95% CI) |
-|:---|:---|:---:|:---:|:---:|:---:|:---:|
-| **Burst** ($t=0$) | Sequential | 36.03x $\pm$ 1.60x | 12.674s | 12.396s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
-| | Static Batching | **70.95x** $\pm$ 1.06x | **6.531s** | **6.124s** | 312.4 / 388.0 | 5.28% [4.00%, 6.81%] |
-| | Continuous Engine | 38.53x $\pm$ 0.31x | 12.024s | 11.230s | 1761.6 / 1830.0 | 5.28% [3.95%, 6.89%] |
-| **Poisson Low** ($\lambda=1.0$) | Sequential | 9.60x $\pm$ 0.01x | 0.720s | 0.185s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
-| | Static Batching | **9.60x** $\pm$ 0.04x | **0.779s** | **0.174s** | 280.5 / 308.7 | 5.28% [4.00%, 6.81%] |
-| | Continuous Engine | 9.59x $\pm$ 0.01x | 0.920s | 0.165s | 1762.2 / 1806.0 | 5.28% [4.00%, 6.86%] |
-| **Poisson High** ($\lambda=4.0$) | Sequential | 25.36x $\pm$ 4.16x | 7.669s | 7.428s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
-| | Static Batching | **36.10x** $\pm$ 0.43x | **1.254s** | **0.612s** | 312.1 / 401.3 | 5.28% [4.00%, 6.81%] |
-| | Continuous Engine | 25.18x $\pm$ 0.08x | 7.161s | 6.112s | 1762.4 / 1831.3 | 5.28% [4.04%, 6.84%] |
+| Traffic Profile | System | Throughput (audio-sec / wall-sec) | Latency p50 (s) | Latency p95 (s) | TTFT p50 (s) | TTFT p95 (s) | Peak VRAM Alloc / Res (MB) | Corpus WER (95% CI) |
+|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Burst** ($t=0$) | Sequential | 36.03x $\pm$ 1.60x | 12.674s | 23.524s | 12.396s | 23.472s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
+| | Static Batching | **70.95x** $\pm$ 1.06x | **6.531s** | **11.957s** | **6.124s** | **11.742s** | 312.4 / 388.0 | 5.28% [4.00%, 6.81%] |
+| | Continuous Engine | 38.53x $\pm$ 0.31x | 12.024s | 22.013s | 11.230s | 21.462s | 1761.6 / 1830.0 | 5.28% [3.95%, 6.89%] |
+| **Poisson Low** ($\lambda=1.0$) | Sequential | 9.60x $\pm$ 0.01x | 0.720s | 1.758s | 0.185s | 1.127s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
+| | Static Batching | **9.60x** $\pm$ 0.04x | **0.779s** | **1.763s** | **0.174s** | **0.808s** | 280.5 / 308.7 | 5.28% [4.00%, 6.81%] |
+| | Continuous Engine | 9.59x $\pm$ 0.01x | 0.920s | 2.296s | 0.165s | 0.463s | 1762.2 / 1806.0 | 5.28% [4.00%, 6.86%] |
+| **Poisson High** ($\lambda=4.0$) | Sequential | 25.36x $\pm$ 4.16x | 7.669s | 12.273s | 7.428s | 12.019s | 189.5 / 214.0 | 5.28% [4.00%, 6.81%] |
+| | Static Batching | **36.10x** $\pm$ 0.43x | **1.254s** | **2.030s** | **0.612s** | **1.386s** | 312.1 / 401.3 | 5.28% [4.00%, 6.81%] |
+| | Continuous Engine | 25.18x $\pm$ 0.08x | 7.161s | 11.914s | 6.112s | 10.847s | 1762.4 / 1831.3 | 5.28% [4.04%, 6.84%] |
+
+*Footnote: Latency is defined as end-to-end latency per request, from arrival to last token.*
 
 - **Traffic Analysis:**
   - **Sequential Parity:** The continuous engine ties sequential under load (Poisson High: 25.18x vs 25.36x, Poisson Low: 9.59x vs 9.60x) and is only about 7% above it in burst (38.53x vs 36.03x). Static batching achieves higher peak throughput (70.95x in burst, 36.10x in Poisson High) because it avoids dynamic scheduler per-step gather/scatter overhead.

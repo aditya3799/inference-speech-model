@@ -26,25 +26,28 @@ def load_json(rel_path: str):
 
 def generate_traffic_table(rs_data):
     lines = []
-    lines.append("| Traffic Profile | System | Throughput (audio-sec / wall-sec) | Latency p50 (s) | TTFT p50 (s) | Peak VRAM Alloc / Res (MB) | Corpus WER (95% CI) |")
-    lines.append("|:---|:---|:---:|:---:|:---:|:---:|:---:|")
+    lines.append("| Traffic Profile | System | Throughput (audio-sec / wall-sec) | Latency p50 (s) | Latency p95 (s) | TTFT p50 (s) | TTFT p95 (s) | Peak VRAM Alloc / Res (MB) | Corpus WER (95% CI) |")
+    lines.append("|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|")
 
-    profiles = [("burst", "Burst ($t=0$)"), ("poisson_low", "Poisson Low ($\lambda=1.0$)"), ("poisson_high", "Poisson High ($\lambda=4.0$)")]
+    profiles = [("burst", "**Burst** ($t=0$)"), ("poisson_low", "**Poisson Low** ($\lambda=1.0$)"), ("poisson_high", "**Poisson High** ($\lambda=4.0$)")]
     systems = [("sequential", "Sequential"), ("static_batching", "Static Batching"), ("engine", "Continuous Engine")]
 
     for prof_key, prof_label in profiles:
         prof_data = rs_data["systems"][prof_key]
         for idx, (sys_key, sys_label) in enumerate(systems):
             agg = prof_data[sys_key]["aggregate"]
-            p_label = prof_label if idx == 0 else ""
+            p_prefix = f"{prof_label} " if idx == 0 else ""
             th_str = f"**{agg['throughput_mean']:.2f}x** $\pm$ {agg['throughput_std']:.2f}x" if sys_key == "static_batching" else f"{agg['throughput_mean']:.2f}x $\pm$ {agg['throughput_std']:.2f}x"
-            lat_str = f"**{agg['latency_p50_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['latency_p50_s_mean']:.3f}s"
-            ttft_str = f"**{agg['ttft_p50_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['ttft_p50_s_mean']:.3f}s"
+            lat_p50_str = f"**{agg['latency_p50_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['latency_p50_s_mean']:.3f}s"
+            lat_p95_str = f"**{agg['latency_p95_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['latency_p95_s_mean']:.3f}s"
+            ttft_p50_str = f"**{agg['ttft_p50_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['ttft_p50_s_mean']:.3f}s"
+            ttft_p95_str = f"**{agg['ttft_p95_s_mean']:.3f}s**" if sys_key == "static_batching" else f"{agg['ttft_p95_s_mean']:.3f}s"
             vram_str = f"{agg['peak_vram_alloc_mb_mean']:.1f} / {agg['peak_vram_res_mb_mean']:.1f}"
             ci = agg["wer_ci_95"]
             wer_str = f"{agg['wer_pct']:.2f}% [{ci[0]:.2f}%, {ci[1]:.2f}%]"
-            lines.append(f"| {p_label} | {sys_label} | {th_str} | {lat_str} | {ttft_str} | {vram_str} | {wer_str} |")
+            lines.append(f"| {p_prefix}| {sys_label} | {th_str} | {lat_p50_str} | {lat_p95_str} | {ttft_p50_str} | {ttft_p95_str} | {vram_str} | {wer_str} |")
 
+    lines.append("\n*Footnote: Latency is defined as end-to-end latency per request, from arrival to last token.*")
     return "\n".join(lines)
 
 def generate_cache_on_off_table(rs_data):
@@ -148,11 +151,19 @@ def generate_capacity_table(abl_data):
     p30 = cap["padded_30s_case"]
     trim = cap["trimmed_encoder_case"]
 
+    budget_mb = cap.get("budget_mb", 512.0)
+    unpaged_trimmed_mb = 10.42
+    paged_trimmed_mb = 5.73
+
+    unpaged_trimmed_reqs = int(budget_mb / unpaged_trimmed_mb)  # 49
+    paged_trimmed_reqs = int(budget_mb / 5.73046875)           # 89 (512 MB / 5.73 MB per req)
+    gain = paged_trimmed_reqs / unpaged_trimmed_reqs           # 1.82x (+82%)
+
     lines = []
-    lines.append("| Audio Representation | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |")
+    lines.append("| Audio Representation (Analytical) | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |")
     lines.append("|:---|:---:|:---:|:---:|:---:|:---|")
     lines.append(f"| **Standard 30s Padded Audio** (1500 positions) | {p30['cross_kv_per_req_mb']:.2f} MB | {p30['unpaged_static_mode']['max_concurrent_requests']} reqs (22.83 MB/req) | {p30['paged_kv_cache_mode']['max_concurrent_requests']} reqs (18.14 MB/req) | **{p30['capacity_multiplier_gain']:.2f}x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |")
-    lines.append(f"| **Trimmed Audio** (~441 positions avg) | {trim['cross_kv_per_req_mb']:.2f} MB | {trim['unpaged_static_mode']['max_concurrent_requests']} reqs (10.42 MB/req) | {trim['paged_kv_cache_mode']['max_concurrent_requests']} reqs (5.73 MB/req) | **{trim['capacity_multiplier_gain']:.2f}x** (+88%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |")
+    lines.append(f"| **Trimmed Audio** (~441 positions avg) | {trim['cross_kv_per_req_mb']:.2f} MB | {unpaged_trimmed_reqs} reqs ({unpaged_trimmed_mb:.2f} MB/req) | {paged_trimmed_reqs} reqs ({paged_trimmed_mb:.2f} MB/req) | **{gain:.2f}x** (+82%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |")
 
     return "\n".join(lines)
 
