@@ -1,0 +1,349 @@
+{
+  "benchmark_config": {
+    "batch_size": 4,
+    "tokens_to_generate": 32,
+    "num_repeats": 3,
+    "model": "openai/whisper-base",
+    "device": "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
+    "torch_version": "2.6.0+cu124",
+    "triton_version": "3.8.0"
+  },
+  "step1_depth_profiling": {
+    "metadata": {
+      "device": "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
+      "torch_version": "2.6.0+cu124",
+      "model": "openai/whisper-base",
+      "bytes_per_token_position": 12288,
+      "enc_seq_len": 1500
+    },
+    "configurations": {
+      "B1_L32": {
+        "batch_size": 1,
+        "seq_len": 32,
+        "total_step_time_ms": {
+          "mean_ms": 41.82298599243164,
+          "std_ms": 13.78913902005738
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 6.376611852645874,
+            "std_ms": 1.5389062877386888
+          },
+          "gather_fraction": 0.1524666807338863
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 3.300106239318848,
+            "std_ms": 1.4029108361446787
+          },
+          "gather_fraction": 0.07890651901124518
+        },
+        "attention_compute": {
+          "mean_ms": 15.20439043521881,
+          "fraction": 0.3635414850094688
+        },
+        "other_and_scatter": {
+          "mean_ms": 16.753008535504343,
+          "fraction": 0.4005694031156933
+        }
+      },
+      "B1_L128": {
+        "batch_size": 1,
+        "seq_len": 128,
+        "total_step_time_ms": {
+          "mean_ms": 27.991408615112306,
+          "std_ms": 6.901810890654685
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 4.991549434661866,
+            "std_ms": 3.1979063701109474
+          },
+          "gather_fraction": 0.17832433884613344
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 2.2802431917190553,
+            "std_ms": 0.6074683731759204
+          },
+          "gather_fraction": 0.08146225233152335
+        },
+        "attention_compute": {
+          "mean_ms": 9.907773445248605,
+          "fraction": 0.3539576582758857
+        },
+        "other_and_scatter": {
+          "mean_ms": 10.662584301233293,
+          "fraction": 0.3809234629041377
+        }
+      },
+      "B4_L32": {
+        "batch_size": 4,
+        "seq_len": 32,
+        "total_step_time_ms": {
+          "mean_ms": 65.87183135986328,
+          "std_ms": 7.518478906533511
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 20.199792633056642,
+            "std_ms": 2.7020568236951457
+          },
+          "gather_fraction": 0.3066529685914378
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 13.863976898193359,
+            "std_ms": 2.7276964566059263
+          },
+          "gather_fraction": 0.2104689760704132
+        },
+        "attention_compute": {
+          "mean_ms": 13.900471042990684,
+          "fraction": 0.2110229935319584
+        },
+        "other_and_scatter": {
+          "mean_ms": 17.730315356850625,
+          "fraction": 0.2691638442536756
+        }
+      },
+      "B4_L128": {
+        "batch_size": 4,
+        "seq_len": 128,
+        "total_step_time_ms": {
+          "mean_ms": 45.98087646484375,
+          "std_ms": 4.509180903858423
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 16.591872177124024,
+            "std_ms": 1.7978478216708125
+          },
+          "gather_fraction": 0.36084288627707883
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 8.310210609436036,
+            "std_ms": 1.361716904634737
+          },
+          "gather_fraction": 0.18073188787059966
+        },
+        "attention_compute": {
+          "mean_ms": 8.765480947494506,
+          "fraction": 0.19063318538950544
+        },
+        "other_and_scatter": {
+          "mean_ms": 12.213125162124634,
+          "fraction": 0.2656131440091751
+        }
+      },
+      "B8_L32": {
+        "batch_size": 8,
+        "seq_len": 32,
+        "total_step_time_ms": {
+          "mean_ms": 86.54069000244141,
+          "std_ms": 14.1253290175135
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 34.95350273132324,
+            "std_ms": 5.90881099682852
+          },
+          "gather_fraction": 0.4038967418717965
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 21.745381088256835,
+            "std_ms": 5.232428001275381
+          },
+          "gather_fraction": 0.2512734886634643
+        },
+        "attention_compute": {
+          "mean_ms": 9.550773753523828,
+          "fraction": 0.11036165476903859
+        },
+        "other_and_scatter": {
+          "mean_ms": 20.112743702530864,
+          "fraction": 0.23240794245993948
+        }
+      },
+      "B8_L128": {
+        "batch_size": 8,
+        "seq_len": 128,
+        "total_step_time_ms": {
+          "mean_ms": 107.02922027587891,
+          "std_ms": 31.371019524493377
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 39.10851890563965,
+            "std_ms": 9.361562368654898
+          },
+          "gather_fraction": 0.3654003907048317
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 29.91840606689453,
+            "std_ms": 15.40768581979767
+          },
+          "gather_fraction": 0.27953493438312205
+        },
+        "attention_compute": {
+          "mean_ms": 13.986316793560983,
+          "fraction": 0.13067755476037105
+        },
+        "other_and_scatter": {
+          "mean_ms": 23.785122453570366,
+          "fraction": 0.22223017594878994
+        }
+      },
+      "B16_L32": {
+        "batch_size": 16,
+        "seq_len": 32,
+        "total_step_time_ms": {
+          "mean_ms": 179.2073486328125,
+          "std_ms": 36.11326390916811
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 77.8837811279297,
+            "std_ms": 14.883091766920733
+          },
+          "gather_fraction": 0.4346014921938828
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 52.21892135620117,
+            "std_ms": 11.719927321159238
+          },
+          "gather_fraction": 0.291388281533004
+        },
+        "attention_compute": {
+          "mean_ms": 12.110693120360374,
+          "fraction": 0.06757922157073268
+        },
+        "other_and_scatter": {
+          "mean_ms": 36.76906384527683,
+          "fraction": 0.20517609420479138
+        }
+      },
+      "B16_L128": {
+        "batch_size": 16,
+        "seq_len": 128,
+        "total_step_time_ms": {
+          "mean_ms": 227.75073791503905,
+          "std_ms": 19.750322307637198
+        },
+        "cross_attention": {
+          "gather_time_ms": {
+            "mean_ms": 105.4322152709961,
+            "std_ms": 12.903299064866072
+          },
+          "gather_fraction": 0.46292809514552224
+        },
+        "self_attention": {
+          "gather_time_ms": {
+            "mean_ms": 63.29470321655273,
+            "std_ms": 6.588239782388001
+          },
+          "gather_fraction": 0.27791217625017933
+        },
+        "attention_compute": {
+          "mean_ms": 13.050259189605713,
+          "fraction": 0.05730062308063313
+        },
+        "other_and_scatter": {
+          "mean_ms": 45.7251866722107,
+          "fraction": 0.2007685555305124
+        }
+      }
+    }
+  },
+  "ablation_matrix": {
+    "sequential_unpaged": {
+      "description": "Sequential (no batch, no paging)",
+      "wall_time_s": {
+        "mean": 4.193176533338071,
+        "std": 0.27998051306288674
+      },
+      "throughput_tok_per_s": 30.525783730384177,
+      "throughput_tok_per_s_std": 2.038221983388797,
+      "peak_vram_allocated_mb": 421.9833984375,
+      "peak_vram_reserved_mb": 474.0,
+      "speedup_vs_sequential": 1.0
+    },
+    "static_batched_unpaged": {
+      "description": "Static Batched Contiguous (batching, no paging)",
+      "wall_time_s": {
+        "mean": 1.4090969333386358,
+        "std": 0.24935764842523633
+      },
+      "throughput_tok_per_s": 90.83832131883499,
+      "throughput_tok_per_s_std": 16.074997862135813,
+      "peak_vram_allocated_mb": 477.482421875,
+      "peak_vram_reserved_mb": 538.0,
+      "speedup_vs_sequential": 2.97578997876533
+    },
+    "hybrid_gather_all": {
+      "description": "Hybrid (gather every step, including cross-KV)",
+      "wall_time_s": {
+        "mean": 3.723136099986732,
+        "std": 0.3610477325794819
+      },
+      "throughput_tok_per_s": 34.37961883812309,
+      "throughput_tok_per_s_std": 3.3339322267846776,
+      "peak_vram_allocated_mb": 725.232421875,
+      "peak_vram_reserved_mb": 842.0,
+      "speedup_vs_sequential": 1.1262485229462909
+    },
+    "hybrid_cached_cross_kv": {
+      "description": "Hybrid + cached cross-KV (gather self-KV only)",
+      "wall_time_s": {
+        "mean": 2.124150699994061,
+        "std": 0.08481305606238866
+      },
+      "throughput_tok_per_s": 60.25937801887497,
+      "throughput_tok_per_s_std": 2.406035506903443,
+      "peak_vram_allocated_mb": 725.232421875,
+      "peak_vram_reserved_mb": 842.0,
+      "speedup_vs_sequential": 1.9740485142366755,
+      "gap_closed_pct": 69.09932308141585
+    },
+    "paged_storage_contiguous_view": {
+      "description": "Paged storage, contiguous allocation (zero-copy view)",
+      "wall_time_s": {
+        "mean": 1.4994562666785594,
+        "std": 0.20710159280925503
+      },
+      "throughput_tok_per_s": 85.36427693455333,
+      "throughput_tok_per_s_std": 11.790325676731614,
+      "peak_vram_allocated_mb": 727.9423828125,
+      "peak_vram_reserved_mb": 842.0,
+      "speedup_vs_sequential": 2.7964647095886046
+    },
+    "direct_paged_triton_kernel": {
+      "description": "Direct paged kernel (Triton)",
+      "wall_time_s": {
+        "mean": 1.8106507333286572,
+        "std": 0.37680828477684825
+      },
+      "throughput_tok_per_s": 70.69281647967956,
+      "throughput_tok_per_s_std": 14.711638436631326,
+      "peak_vram_allocated_mb": 820.806640625,
+      "peak_vram_reserved_mb": 940.0,
+      "speedup_vs_sequential": 2.3158395245169316
+    }
+  },
+  "concurrency_capacity_test": {
+    "padded_30s_case": {
+      "unpaged_static_max_reqs": 22,
+      "paged_kv_cache_max_reqs": 28,
+      "capacity_multiplier_gain": 1.2727272727272727
+    },
+    "trimmed_encoder_case": {
+      "unpaged_static_max_reqs": 49,
+      "paged_kv_cache_max_reqs": 89,
+      "capacity_multiplier_gain": 1.816326530612245
+    }
+  }
+}
