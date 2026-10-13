@@ -97,7 +97,7 @@ def build_updated_notebook():
             "---\n",
             "## 8. Real-Speech Evaluation: Pretrained Whisper-base on LibriSpeech test-clean\n",
             "\n",
-            "To address the reviewer requirement for real-speech evaluation, we integrate the pretrained `openai/whisper-base` checkpoint and evaluate on a fixed, stratified subset of 100 utterances from LibriSpeech `test-clean` (short < 5s, medium 5–12s, long 12–30s):\n",
+            "To evaluate real-speech serving performance, we integrate the pretrained `openai/whisper-base` checkpoint and evaluate on a fixed, stratified subset of 100 utterances from LibriSpeech `test-clean` (short < 5s, medium 5–12s, long 12–30s):\n",
             "\n",
             "### Key Methodological Invariants:\n",
             "1. **Parity Check**: Exact greedy token match comparison against Hugging Face `generate()` across 20 utterances in FP32 and FP16.\n",

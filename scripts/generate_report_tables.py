@@ -264,5 +264,179 @@ def main():
     print(f"E2 rel L2 (Offset Shifts, n=148): median={e2_med:.4f} ({e2_med/noise:.1f}x noise), p95={e2_p95:.4f} ({e2_p95/noise:.1f}x noise), max={e2_max:.4f} ({e2_max/noise:.1f}x noise)")
     print(f"E2 token divergence: {e2_s['diverged_shifts_count']}/148 shifts diverged ({e2_s['exact_token_match_rate']*100:.1f}% match rate), spliced WER delta: {e2_s['wer_delta_mean']:+.4f} (95% CI: [{e2_s['wer_delta_ci_95'][0]:+.4f}, {e2_s['wer_delta_ci_95'][1]:+.4f}])")
 
+
+def generate_traffic_table_v2(rs_data):
+    lines = []
+    lines.append("| Traffic Profile | System | Throughput (audio-sec / wall-sec) | Latency p50 (s) | Latency p95 (s) | TTFT p50 (s) | TTFT p95 (s) | Peak VRAM Alloc / Res (MB) | Actually Used Pool (MB) | Corpus WER (95% CI) |")
+    lines.append("|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|")
+
+    profiles = [("burst", "**Burst** ($t=0$)"), ("poisson_low", "**Poisson Low** ($\lambda=1.0$)"), ("poisson_high", "**Poisson High** ($\lambda=4.0$)")]
+    systems = [
+        ("sequential", "Sequential"),
+        ("static_batching", "Static Batching"),
+        ("engine_flag_off", "Engine (Flag OFF, re-gather)"),
+        ("engine_flag_on", "Engine (Flag ON, cached cross-KV)"),
+    ]
+
+    for prof_key, prof_label in profiles:
+        prof_data = rs_data["systems"][prof_key]
+        for idx, (sys_key, sys_label) in enumerate(systems):
+            agg = prof_data[sys_key]["aggregate"]
+            p_prefix = f"{prof_label} " if idx == 0 else ""
+            th_str = f"**{agg['throughput_mean']:.2f}x** $\pm$ {agg['throughput_std']:.2f}x" if sys_key == "engine_flag_on" else f"{agg['throughput_mean']:.2f}x $\pm$ {agg['throughput_std']:.2f}x"
+            lat_p50_str = f"**{agg['latency_p50_s_mean']:.3f}s**" if sys_key == "engine_flag_on" else f"{agg['latency_p50_s_mean']:.3f}s"
+            lat_p95_str = f"**{agg['latency_p95_s_mean']:.3f}s**" if sys_key == "engine_flag_on" else f"{agg['latency_p95_s_mean']:.3f}s"
+            ttft_p50_str = f"{agg['ttft_p50_s_mean']:.3f}s"
+            ttft_p95_str = f"{agg['ttft_p95_s_mean']:.3f}s"
+            vram_str = f"{agg['peak_vram_alloc_mb_mean']:.1f} / {agg['peak_vram_res_mb_mean']:.1f}"
+
+            used_val = agg.get("peak_actually_used_mb_mean", "not measured")
+            if isinstance(used_val, (int, float)):
+                used_str = f"{used_val:.2f} MB"
+            else:
+                used_str = str(used_val)
+
+            ci = agg["wer_ci_95"]
+            wer_str = f"{agg['wer_pct']:.2f}% [{ci[0]:.2f}%, {ci[1]:.2f}%]"
+            lines.append(f"| {p_prefix}| {sys_label} | {th_str} | {lat_p50_str} | {lat_p95_str} | {ttft_p50_str} | {ttft_p95_str} | {vram_str} | {used_str} | {wer_str} |")
+
+    lines.append("\n*Footnote: Latency is defined as end-to-end latency per request, from arrival to last token. Actually used pool memory tracks active pool blocks in use x block bytes, plus contiguous cross-KV copies for Flag ON.*")
+    return "\n".join(lines)
+
+
+def generate_concurrency_table_v2(rs_data):
+    lines = []
+    lines.append("| Profile | Engine Variant | Avg In-Flight Reqs | Max In-Flight Reqs | Queue Wait Mean (s) | Queue Wait p50 (s) | Queue Wait p95 (s) | Actually Used Peak (MB) | Rejections |")
+    lines.append("|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|")
+
+    profiles = [("burst", "Burst ($t=0$)"), ("poisson_low", "Poisson Low ($\lambda=1.0$)"), ("poisson_high", "Poisson High ($\lambda=4.0$)")]
+    for prof_key, prof_label in profiles:
+        for sys_key, sys_label in [("engine_flag_off", "Flag OFF (re-gather)"), ("engine_flag_on", "Flag ON (cached cross-KV)")]:
+            c = rs_data["systems"][prof_key][sys_key]["aggregate"]["concurrency"]
+            lines.append(f"| {prof_label} | {sys_label} | {c['avg_in_flight_mean']:.2f} | {c['max_in_flight_max']} | {c['queue_wait_time_mean_s']:.3f}s | {c['queue_wait_time_p50_s']:.3f}s | {c['queue_wait_time_p95_s']:.3f}s | {c.get('peak_actually_used_mb_mean', 0.0):.2f} MB | {c['rejections_mean']:.0f} |")
+
+    return "\n".join(lines)
+
+
+def generate_drift_analysis(rs_v1, rs_v2):
+    lines = []
+    lines.append("### Baseline Drift Verification (Engine Flag OFF vs Previous Run)")
+    lines.append("")
+    lines.append("| Profile | Metric | Previous (v1 Engine) | Current (v2 Flag OFF) | Delta ($\Delta$) | Combined Std ($\sigma_{comb}$) | Drift Status |")
+    lines.append("|:---|:---|:---:|:---:|:---:|:---:|:---|")
+
+    profiles = ["burst", "poisson_low", "poisson_high"]
+    metrics = [
+        ("throughput_mean", "throughput_std", "Throughput (audio-s/wall-s)", "x"),
+        ("latency_p50_s_mean", "latency_p50_s_std", "Latency p50 (s)", "s"),
+        ("latency_p95_s_mean", "latency_p95_s_std", "Latency p95 (s)", "s"),
+        ("peak_vram_alloc_mb_mean", "peak_vram_alloc_mb_std", "Peak VRAM Alloc (MB)", "MB"),
+    ]
+
+    drift_count = 0
+    for prof in profiles:
+        v1_agg = rs_v1["systems"][prof]["engine"]["aggregate"]
+        v2_agg = rs_v2["systems"][prof]["engine_flag_off"]["aggregate"]
+
+        for m_mean, m_std, label, unit in metrics:
+            val1 = v1_agg[m_mean]
+            std1 = v1_agg.get(m_std, 0.0)
+            val2 = v2_agg[m_mean]
+            std2 = v2_agg.get(m_std, 0.0)
+
+            diff = val2 - val1
+            comb_std = np.sqrt(std1**2 + std2**2)
+            threshold = max(comb_std, std1, std2, 1e-4)
+
+            is_drift = abs(diff) > threshold
+            if is_drift:
+                drift_count += 1
+                status = f"**DRIFT EXCEEDS $\sigma$** (|$\Delta$|={abs(diff):.3f} > {threshold:.3f})"
+            else:
+                status = f"Reproduced within noise (|$\Delta$|={abs(diff):.3f} $\le$ {threshold:.3f})"
+
+            lines.append(f"| {prof} | {label} | {val1:.3f}{unit} $\pm$ {std1:.3f} | {val2:.3f}{unit} $\pm$ {std2:.3f} | {diff:+.3f}{unit} | {threshold:.3f}{unit} | {status} |")
+
+    lines.append("")
+    if drift_count == 0:
+        lines.append("> **Verdict:** All metrics for row 3 (Engine Flag OFF) reproduce the previous run within run-to-run variation ($\le 1\sigma$). Zero unexpected drift detected.")
+    else:
+        lines.append(f"> **Verdict:** {drift_count} metric(s) showed drift larger than run-to-run std.")
+    return "\n".join(lines)
+
+
+def generate_token_parity_report(rs_v2):
+    lines = []
+    lines.append("### Token Parity vs Hugging Face Reference (All Systems)")
+    lines.append("")
+    lines.append("| Traffic Profile | System | HF Match Rate (%) | Total Requests | Differing Utterances |")
+    lines.append("|:---|:---|:---:|:---:|:---|")
+
+    profiles = ["burst", "poisson_low", "poisson_high"]
+    systems = ["sequential", "static_batching", "engine_flag_off", "engine_flag_on"]
+
+    for prof in profiles:
+        for sys_name in systems:
+            sys_data = rs_v2["systems"][prof][sys_name]
+            agg = sys_data["aggregate"]
+            match_pct = agg["token_match_rate_pct"]
+
+            # Check differing utterances in run 0
+            run0 = sys_data["runs"][0]
+            differing = []
+            for req in run0["per_request"]:
+                if req["gen_tokens"] != req["hf_tokens"]:
+                    differing.append(req["sample_id"])
+
+            diff_str = "None (100% exact match)" if not differing else ", ".join(differing[:5])
+            if len(differing) > 5:
+                diff_str += f" (+{len(differing)-5} more)"
+
+            lines.append(f"| {prof} | {sys_name} | {match_pct:.1f}% | {len(run0['per_request'])} | {diff_str} |")
+
+    return "\n".join(lines)
+
+
+def main_v2():
+    rs_v1 = load_json("data/real_speech_evaluation_results.json")
+    rs_v2 = load_json("data/real_speech_evaluation_results_v2.json")
+
+    out_md = []
+    out_md.append("# Real-Speech Serving Evaluation (v2 - Cached Cross-KV Ablation)")
+    out_md.append("")
+    out_md.append(f"- **Model**: openai/whisper-base (FP16)")
+    out_md.append(f"- **Workload**: LibriSpeech test-clean 100 utterances, 3 repeats per system, max_batch_size=4")
+    out_md.append(f"- **Evaluated Systems**:")
+    out_md.append(f"  1. `sequential` (unbatched baseline)")
+    out_md.append(f"  2. `static_batching` (fixed batch size 4, padded decode)")
+    out_md.append(f"  3. `engine_flag_off` (continuous batching + dual paged cache, re-gather cross-KV every step)")
+    out_md.append(f"  4. `engine_flag_on` (continuous batching + one-time cross-KV gather at handoff)")
+    out_md.append("")
+    out_md.append("## 1. Traffic Profile Serving Performance (4 Rows per Profile)")
+    out_md.append(generate_traffic_table_v2(rs_v2))
+    out_md.append("")
+    out_md.append("## 2. Telemetry and Runtime Concurrency")
+    out_md.append(generate_concurrency_table_v2(rs_v2))
+    out_md.append("")
+    out_md.append("## 3. Drift Analysis (Row 3 Reproducibility)")
+    out_md.append(generate_drift_analysis(rs_v1, rs_v2))
+    out_md.append("")
+    out_md.append("## 4. Token Parity Verification")
+    out_md.append(generate_token_parity_report(rs_v2))
+    out_md.append("")
+
+    content = "\n".join(out_md)
+    print(content)
+
+    out_path = REPO_ROOT / "data" / "real_speech_tables_v2.md"
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"\nTables successfully saved to {out_path}!")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--v2" in sys.argv:
+        main_v2()
+    else:
+        main()

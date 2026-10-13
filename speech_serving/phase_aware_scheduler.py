@@ -129,6 +129,7 @@ class PhaseAwareSpeechScheduler:
         device: str = "cuda",
         eos_token_id: Optional[int] = None,
         max_cached_encoder_inputs: int = 100,
+        cache_cross_kv: bool = False,
     ):
         self.model = model
         self.dual_cache = dual_cache_manager
@@ -140,6 +141,7 @@ class PhaseAwareSpeechScheduler:
         self.device = device
         self.eos_token_id = eos_token_id
         self.max_cached_encoder_inputs = max_cached_encoder_inputs
+        self.cache_cross_kv = cache_cross_kv
 
         self.queue: List[DualCacheRequest] = []
         self.active_encode: List[DualCacheRequest] = []
@@ -149,6 +151,7 @@ class PhaseAwareSpeechScheduler:
 
         # Concurrency & telemetry tracking
         self.peak_in_flight_requests: int = 0
+        self.peak_actually_used_bytes: int = 0
         self.rejected_requests_count: int = 0
         self.in_flight_history: List[int] = []
         self.queue_wait_times: List[float] = []
@@ -347,7 +350,7 @@ class PhaseAwareSpeechScheduler:
 
         Block-count fix: `needed_enc_blocks` is computed from `enc_seq_len`
         (≈ mel_len // 2 after Conv2 stride-2), not from `mel_len`, to avoid
-        the 2× over-reservation reported by reviewer (b).
+        the 2× over-reservation observed in earlier memory profiling.
 
         Shared-block safety: on a miss path, blocks with ref_count > 1 are
         never overwritten (allocate_block() always returns freshly allocated
@@ -653,57 +656,89 @@ class PhaseAwareSpeechScheduler:
                     if req.decoder_seq_len < max_dec_len:
                         self_attn_mask[i, req.decoder_seq_len:max_dec_len] = 0
 
-        # 4. Build batched encoder past KV cache list (with cross-step batch reuse)
+        # 4. Build batched encoder past KV cache list
         enc_mask = None
-        if batch_size == 1:
-            enc_kv_layers = self.active_decode[0].cached_encoder_kv
-        else:
-            batch_key = tuple(req.id for req in self.active_decode)
-            if self._cached_batch_key == batch_key and self._cached_batched_enc_kv is not None:
-                enc_kv_layers = self._cached_batched_enc_kv
-                enc_mask = self._cached_enc_mask
-            else:
-                max_enc_len = max(req.encoder_seq_len for req in self.active_decode)
-                min_enc_len = min(req.encoder_seq_len for req in self.active_decode)
-                num_enc_layers = self.model.num_encoder_layers
-                enc_num_heads = self.dual_cache.encoder_bm.num_heads
-                enc_head_dim = self.dual_cache.encoder_bm.head_dim
-                enc_dtype = self.dual_cache.encoder_bm.dtype
+        if not self.cache_cross_kv:
+            # Legacy / pre-fix path: re-gather cross-attention KV from physical blocks on EVERY decode step
+            num_enc_layers = self.model.num_encoder_layers
+            enc_num_heads = self.dual_cache.encoder_bm.num_heads
+            enc_head_dim = self.dual_cache.encoder_bm.head_dim
+            enc_dtype = self.dual_cache.encoder_bm.dtype
+            max_enc_len = max(req.encoder_seq_len for req in self.active_decode)
+            min_enc_len = min(req.encoder_seq_len for req in self.active_decode)
 
-                enc_kv_layers = []
-                for l in range(num_enc_layers):
-                    if min_enc_len == max_enc_len:
-                        b_k = torch.cat([req.cached_encoder_kv[l][0] for req in self.active_decode], dim=0)
-                        b_v = torch.cat([req.cached_encoder_kv[l][1] for req in self.active_decode], dim=0)
-                    else:
-                        b_k = torch.zeros(
-                            (batch_size, enc_num_heads, max_enc_len, enc_head_dim),
-                            device=self.device, dtype=enc_dtype
-                        )
-                        b_v = torch.zeros(
-                            (batch_size, enc_num_heads, max_enc_len, enc_head_dim),
-                            device=self.device, dtype=enc_dtype
-                        )
-                        for i, req in enumerate(self.active_decode):
-                            ck, cv = req.cached_encoder_kv[l]
-                            b_k[i, :, :req.encoder_seq_len, :] = ck[0]
-                            b_v[i, :, :req.encoder_seq_len, :] = cv[0]
-                    enc_kv_layers.append((b_k, b_v))
-
-                if min_enc_len < max_enc_len:
-                    enc_mask = torch.zeros(
-                        (batch_size, 1, 1, max_enc_len),
-                        device=self.device,
-                        dtype=torch.bool,
-                    )
-                    for i, req in enumerate(self.active_decode):
-                        enc_mask[i, 0, 0, :req.encoder_seq_len] = True
+            enc_kv_layers = []
+            for l in range(num_enc_layers):
+                if min_enc_len == max_enc_len:
+                    b_k = torch.cat([
+                        self.dual_cache.encoder_bm.key_pool[l][req.encoder_block_table].view(
+                            -1, enc_num_heads, enc_head_dim
+                        )[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                        for req in self.active_decode
+                    ], dim=0)
+                    b_v = torch.cat([
+                        self.dual_cache.encoder_bm.value_pool[l][req.encoder_block_table].view(
+                            -1, enc_num_heads, enc_head_dim
+                        )[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                        for req in self.active_decode
+                    ], dim=0)
                 else:
-                    enc_mask = None
+                    b_k = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                    b_v = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                    for i, req in enumerate(self.active_decode):
+                        k_blks = self.dual_cache.encoder_bm.key_pool[l][req.encoder_block_table]
+                        v_blks = self.dual_cache.encoder_bm.value_pool[l][req.encoder_block_table]
+                        b_k[i, :, :req.encoder_seq_len, :] = k_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)[0]
+                        b_v[i, :, :req.encoder_seq_len, :] = v_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)[0]
+                enc_kv_layers.append((b_k, b_v))
 
-                self._cached_batch_key = batch_key
-                self._cached_batched_enc_kv = enc_kv_layers
-                self._cached_enc_mask = enc_mask
+            if min_enc_len < max_enc_len:
+                enc_mask = torch.zeros((batch_size, 1, 1, max_enc_len), device=self.device, dtype=torch.bool)
+                for i, req in enumerate(self.active_decode):
+                    enc_mask[i, 0, 0, :req.encoder_seq_len] = True
+            else:
+                enc_mask = None
+        else:
+            # Optimized path (cache_cross_kv=True): cross-KV gathered once at handoff, reused across decode steps
+            if batch_size == 1:
+                enc_kv_layers = self.active_decode[0].cached_encoder_kv
+            else:
+                batch_key = tuple(req.id for req in self.active_decode)
+                if self._cached_batch_key == batch_key and self._cached_batched_enc_kv is not None:
+                    enc_kv_layers = self._cached_batched_enc_kv
+                    enc_mask = self._cached_enc_mask
+                else:
+                    max_enc_len = max(req.encoder_seq_len for req in self.active_decode)
+                    min_enc_len = min(req.encoder_seq_len for req in self.active_decode)
+                    num_enc_layers = self.model.num_encoder_layers
+                    enc_num_heads = self.dual_cache.encoder_bm.num_heads
+                    enc_head_dim = self.dual_cache.encoder_bm.head_dim
+                    enc_dtype = self.dual_cache.encoder_bm.dtype
+
+                    enc_kv_layers = []
+                    for l in range(num_enc_layers):
+                        if min_enc_len == max_enc_len:
+                            b_k = torch.cat([req.cached_encoder_kv[l][0] for req in self.active_decode], dim=0)
+                            b_v = torch.cat([req.cached_encoder_kv[l][1] for req in self.active_decode], dim=0)
+                        else:
+                            b_k = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                            b_v = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                            for i, req in enumerate(self.active_decode):
+                                ck, cv = req.cached_encoder_kv[l]
+                                b_k[i, :, :req.encoder_seq_len, :] = ck[0]
+                                b_v[i, :, :req.encoder_seq_len, :] = cv[0]
+                        enc_kv_layers.append((b_k, b_v))
+
+                    if min_enc_len < max_enc_len:
+                        enc_mask = torch.zeros((batch_size, 1, 1, max_enc_len), device=self.device, dtype=torch.bool)
+                        for i, req in enumerate(self.active_decode):
+                            enc_mask[i, 0, 0, :req.encoder_seq_len] = True
+                    else:
+                        enc_mask = None
+
+                    self._cached_batch_key = batch_key
+                    self._cached_batched_enc_kv = enc_kv_layers
+                    self._cached_enc_mask = enc_mask
 
         # 5. Run single batched forward pass on GPU
         position_ids = torch.tensor(
@@ -794,6 +829,27 @@ class PhaseAwareSpeechScheduler:
             self._cached_enc_mask = None
             self.completed.append(req)
 
+    def _update_peak_actually_used(self):
+        """Update peak pool memory + contiguous cross-KV copies in use."""
+        enc_bm = self.dual_cache.encoder_bm
+        dec_bm = self.dual_cache.decoder_bm
+        dt_bytes = 2 if enc_bm.dtype in (torch.float16, torch.bfloat16) else 4
+        enc_blk_bytes = 2 * enc_bm.num_layers * enc_bm.num_heads * enc_bm.block_size * enc_bm.head_dim * dt_bytes
+        dec_blk_bytes = 2 * dec_bm.num_layers * dec_bm.num_kv_heads * dec_bm.block_size * dec_bm.head_dim * dt_bytes
+        used_pool_bytes = (enc_bm.allocated_block_count * enc_blk_bytes) + (dec_bm.allocated_block_count * dec_blk_bytes)
+
+        cached_cross_bytes = 0
+        if self.cache_cross_kv:
+            for req in self.active_decode:
+                if req.cached_encoder_kv is not None:
+                    cached_cross_bytes += (
+                        req.encoder_seq_len * 2 * enc_bm.num_layers * enc_bm.num_heads * enc_bm.head_dim * dt_bytes
+                    )
+
+        now_used = used_pool_bytes + cached_cross_bytes
+        if now_used > self.peak_actually_used_bytes:
+            self.peak_actually_used_bytes = now_used
+
     def step(self) -> bool:
         """
         Phase-aware scheduler step.
@@ -803,6 +859,7 @@ class PhaseAwareSpeechScheduler:
         if in_flight > self.peak_in_flight_requests:
             self.peak_in_flight_requests = in_flight
         self.in_flight_history.append(in_flight)
+        self._update_peak_actually_used()
 
         if self.verbose:
             enc_stats = self.dual_cache.encoder_bm.get_stats()
@@ -815,7 +872,9 @@ class PhaseAwareSpeechScheduler:
             )
 
         self._process_encode_phase()
+        self._update_peak_actually_used()
         self._process_decode_phase()
+        self._update_peak_actually_used()
 
         if self.step_delay > 0:
             time.sleep(self.step_delay)
@@ -842,6 +901,8 @@ class PhaseAwareSpeechScheduler:
         self.in_flight_history = []
         self.queue_wait_times = []
         self.completed = []
+        self.peak_in_flight_requests = 0
+        self.peak_actually_used_bytes = 0
 
     def get_concurrency_stats(self) -> Dict[str, Any]:
         """Return memory pool sizing, per-request demand, and runtime concurrency statistics."""
@@ -882,6 +943,7 @@ class PhaseAwareSpeechScheduler:
             "queue_wait_time_p50_s": float(np.percentile(q_waits, 50)),
             "queue_wait_time_p95_s": float(np.percentile(q_waits, 95)),
             "rejections_per_run": self.rejected_requests_count,
+            "peak_actually_used_mb": float(self.peak_actually_used_bytes / (1024 * 1024)),
         }
 
     def get_encoder_telemetry(self) -> Dict[str, Any]:

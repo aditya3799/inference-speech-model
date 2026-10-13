@@ -667,6 +667,119 @@ class TestSpeechServingEngine(unittest.TestCase):
         self.assertEqual(dec_bm.allocated_block_count, 0)
         print(">>> PretrainedWhisperModel Integration Test PASSED: Real Whisper encoder/decoder paged serving verified.")
 
+    def test_cache_cross_kv_parity(self):
+        """Test exact output token parity between cache_cross_kv=False and cache_cross_kv=True."""
+        print("\n--- Running Test: cache_cross_kv Output Token Parity ---")
+        hidden_dim = 64
+        num_heads = 4
+        head_dim = hidden_dim // num_heads
+
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=hidden_dim,
+            num_heads=num_heads,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        torch.manual_seed(42)
+        mel = torch.randn(80, 200, device=self.device, dtype=self.dtype)
+        prompt = torch.tensor([[1, 2, 3]], device=self.device, dtype=torch.long)
+
+        # Run with flag OFF
+        enc_bm1 = EncoderBlockManager(num_layers=2, num_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        dec_bm1 = BlockManager(num_layers=2, num_kv_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        sched1 = PhaseAwareSpeechScheduler(model=model, dual_cache_manager=DualCacheManager(enc_bm1, dec_bm1), max_batch_size=2, device=self.device, cache_cross_kv=False)
+        sched1.submit(mel, prompt_token_ids=prompt, max_new_tokens=8)
+        comp1 = sched1.run_until_done()
+
+        # Run with flag ON
+        enc_bm2 = EncoderBlockManager(num_layers=2, num_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        dec_bm2 = BlockManager(num_layers=2, num_kv_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        sched2 = PhaseAwareSpeechScheduler(model=model, dual_cache_manager=DualCacheManager(enc_bm2, dec_bm2), max_batch_size=2, device=self.device, cache_cross_kv=True)
+        sched2.submit(mel, prompt_token_ids=prompt, max_new_tokens=8)
+        comp2 = sched2.run_until_done()
+
+        self.assertEqual(comp1[0].generated_tokens, comp2[0].generated_tokens)
+        print(f">>> cache_cross_kv parity PASSED: Both produced identical tokens {comp1[0].generated_tokens}")
+
+    def test_cache_cross_kv_zero_block_leaks(self):
+        """Test zero memory leakage when cache_cross_kv=True."""
+        print("\n--- Running Test: cache_cross_kv Zero Block Leaks ---")
+        hidden_dim = 64
+        num_heads = 4
+        head_dim = hidden_dim // num_heads
+
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=hidden_dim,
+            num_heads=num_heads,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        enc_bm = EncoderBlockManager(num_layers=2, num_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(num_layers=2, num_kv_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        sched = PhaseAwareSpeechScheduler(model=model, dual_cache_manager=DualCacheManager(enc_bm, dec_bm), max_batch_size=4, device=self.device, cache_cross_kv=True)
+
+        for i in range(5):
+            mel = torch.randn(80, 150 + i * 20, device=self.device, dtype=self.dtype)
+            prompt = torch.tensor([[1, 2]], device=self.device, dtype=torch.long)
+            sched.submit(mel, prompt_token_ids=prompt, max_new_tokens=10)
+
+        completed = sched.run_until_done()
+        self.assertEqual(len(completed), 5)
+        self.assertEqual(enc_bm.allocated_block_count, 0)
+        self.assertEqual(dec_bm.allocated_block_count, 0)
+        self.assertIsNone(completed[0].cached_encoder_kv)
+        print(">>> cache_cross_kv zero block leaks PASSED: All physical blocks returned to pools.")
+
+    def test_cache_cross_kv_cache_hit_skips_encoder(self):
+        """Test that full-input cache hit still skips the encoder when cache_cross_kv=True."""
+        print("\n--- Running Test: cache_cross_kv Cache Hit Skips Encoder ---")
+        hidden_dim = 64
+        num_heads = 4
+        head_dim = hidden_dim // num_heads
+
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=hidden_dim,
+            num_heads=num_heads,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        enc_bm = EncoderBlockManager(num_layers=2, num_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(num_layers=2, num_kv_heads=num_heads, head_dim=head_dim, block_size=16, num_blocks=128, dtype=self.dtype, device=self.device)
+        sched = PhaseAwareSpeechScheduler(
+            model=model,
+            dual_cache_manager=DualCacheManager(enc_bm, dec_bm),
+            max_batch_size=2,
+            retain_encoder_cache=True,
+            device=self.device,
+            cache_cross_kv=True,
+        )
+
+        mel = torch.randn(80, 200, device=self.device, dtype=self.dtype)
+        prompt = torch.tensor([[1, 2]], device=self.device, dtype=torch.long)
+
+        # First submission: cache miss
+        sched.submit(mel, prompt_token_ids=prompt, max_new_tokens=5)
+        sched.run_until_done()
+        self.assertEqual(sched.encoder_calls, 1)
+        self.assertEqual(sched.encoder_calls_skipped, 0)
+
+        # Second submission: identical audio, cache hit
+        sched.submit(mel, prompt_token_ids=prompt, max_new_tokens=5)
+        sched.run_until_done()
+        self.assertEqual(sched.encoder_calls, 1)
+        self.assertEqual(sched.encoder_calls_skipped, 1)
+        print(f">>> cache_cross_kv cache hit PASSED: Encoder skipped on hit (calls={sched.encoder_calls}, skipped={sched.encoder_calls_skipped}).")
+
 
 if __name__ == "__main__":
     unittest.main()
+

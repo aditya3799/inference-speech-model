@@ -168,7 +168,10 @@ class RealSpeechBenchmark:
         gc.collect()
         torch.cuda.empty_cache()
 
-        return self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
+        metrics = self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
+        metrics["peak_actually_used_mb"] = "not measured"
+        metrics["concurrency_stats"] = "not measured"
+        return metrics
 
     def run_static_batching(self, traffic: List[Dict[str, Any]], batch_size: int = 4, max_new_tokens: int = 150) -> Dict[str, Any]:
         """System 2: Static batching (fixed batch size, padded decode, waits for slowest)."""
@@ -269,7 +272,10 @@ class RealSpeechBenchmark:
         gc.collect()
         torch.cuda.empty_cache()
 
-        return self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
+        metrics = self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
+        metrics["peak_actually_used_mb"] = "not measured"
+        metrics["concurrency_stats"] = "not measured"
+        return metrics
 
     def run_engine(
         self,
@@ -277,8 +283,9 @@ class RealSpeechBenchmark:
         max_batch_size: int = 4,
         max_new_tokens: int = 150,
         retain_encoder_cache: bool = False,
+        cache_cross_kv: bool = False,
     ) -> Dict[str, Any]:
-        """System 3: Engine (continuous batching + paged dual cache)."""
+        """Engine (continuous batching + paged dual cache)."""
         torch.cuda.reset_peak_memory_stats()
 
         enc_bm = EncoderBlockManager(
@@ -305,6 +312,7 @@ class RealSpeechBenchmark:
             dual_cache_manager=cache_mgr,
             max_batch_size=max_batch_size,
             retain_encoder_cache=retain_encoder_cache,
+            cache_cross_kv=cache_cross_kv,
             eos_token_id=WHISPER_EOS_TOKEN_ID,
             max_cached_encoder_inputs=100,
             device=self.device,
@@ -373,7 +381,9 @@ class RealSpeechBenchmark:
             "encoder_calls_skipped": scheduler.encoder_calls_skipped,
             "encode_time_saved_s": scheduler.encode_time_saved_s,
         }
-        metrics["concurrency_stats"] = scheduler.get_concurrency_stats()
+        concurrency_stats = scheduler.get_concurrency_stats()
+        metrics["concurrency_stats"] = concurrency_stats
+        metrics["peak_actually_used_mb"] = concurrency_stats["peak_actually_used_mb"]
         del scheduler, cache_mgr, enc_bm, dec_bm
         gc.collect()
         torch.cuda.empty_cache()
@@ -478,16 +488,20 @@ def run_benchmark_suite(
     num_repeats: int = 3,
     max_samples: int = 100,
     batch_size: int = 4,
-    output_path: str = "task4_real_speech_results.json",
-):
-    bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
+    output_path: str = "data/real_speech_evaluation_results_v2.json",
+    include_repeated: bool = False,
+    bench: Optional[RealSpeechBenchmark] = None,
+) -> Dict[str, Any]:
+    if bench is None:
+        bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
 
     # 1. Warm-up run (discarded)
     print("\n--- Running Warm-up Run (5 samples, discarded) ---")
     warm_traffic = [{"req_id": i, "sample_idx": i, "arrival_time": 0.0} for i in range(min(5, len(bench.samples)))]
     bench.run_sequential(warm_traffic)
     bench.run_static_batching(warm_traffic, batch_size=batch_size)
-    bench.run_engine(warm_traffic, max_batch_size=batch_size)
+    bench.run_engine(warm_traffic, max_batch_size=batch_size, cache_cross_kv=False)
+    bench.run_engine(warm_traffic, max_batch_size=batch_size, cache_cross_kv=True)
     print("Warm-up complete. Starting measured benchmark runs...")
 
     num_samples = min(len(bench.samples), max_samples)
@@ -501,21 +515,23 @@ def run_benchmark_suite(
         "poisson_high": traffic_poisson_high,
     }
 
+    start_iso = time.strftime("%Y-%m-%d %H:%M:%S")
     results = {
         "metadata": {
             "gpu_name": torch.cuda.get_device_name(0),
             "torch_version": torch.__version__,
             "model": "openai/whisper-base",
-            "commit_hash": "e37978b90ca9030d5170a5c07aadb050351a65bb",
+            "benchmark_branch": "feature/cached-cross-kv",
             "dataset": "LibriSpeech test-clean (100 stratified utterances)",
             "repeats": num_repeats,
+            "session_start_time": start_iso,
+            "background_load": "idle (dedicated single session)",
         },
         "systems": {},
-        "repeated_workload": {},
     }
 
-    # Systems: Sequential, Static Batching, Engine
-    system_names = ["sequential", "static_batching", "engine"]
+    # Systems: 1. sequential, 2. static_batching, 3. engine_flag_off, 4. engine_flag_on
+    system_names = ["sequential", "static_batching", "engine_flag_off", "engine_flag_on"]
 
     for prof_name, traffic_data in profiles.items():
         print(f"\n==================================================================")
@@ -534,10 +550,13 @@ def run_benchmark_suite(
                     run_res = bench.run_sequential(traffic_data)
                 elif sys_name == "static_batching":
                     run_res = bench.run_static_batching(traffic_data, batch_size=batch_size)
-                elif sys_name == "engine":
-                    run_res = bench.run_engine(traffic_data, max_batch_size=batch_size, retain_encoder_cache=False)
+                elif sys_name == "engine_flag_off":
+                    run_res = bench.run_engine(traffic_data, max_batch_size=batch_size, retain_encoder_cache=False, cache_cross_kv=False)
+                elif sys_name == "engine_flag_on":
+                    run_res = bench.run_engine(traffic_data, max_batch_size=batch_size, retain_encoder_cache=False, cache_cross_kv=True)
 
-                print(f" Done in {run_res['wall_time_s']:.2f}s | Throughput: {run_res['throughput_audio_per_sec']:.2f}x (audio-sec / wall-sec) | WER: {run_res['wer_pct']:.2f}% | Lat p50: {run_res['latency_p50_s']:.2f}s")
+                used_str = f" | Pool used: {run_res.get('peak_actually_used_mb', 'N/A')} MB" if sys_name.startswith("engine") else ""
+                print(f" Done in {run_res['wall_time_s']:.2f}s | Throughput: {run_res['throughput_audio_per_sec']:.2f}x | WER: {run_res['wer_pct']:.2f}% | Lat p50: {run_res['latency_p50_s']:.2f}s{used_str}")
                 repeat_runs.append(run_res)
 
             # Compute mean and std across repeats
@@ -563,7 +582,7 @@ def run_benchmark_suite(
                 "wer_ci_95": repeat_runs[0].get("wer_ci_95", [repeat_runs[0]["wer_pct"], repeat_runs[0]["wer_pct"]]),
                 "token_match_rate_pct": repeat_runs[0]["token_match_rate_pct"],
             }
-            if sys_name == "engine" and "concurrency_stats" in repeat_runs[0]:
+            if sys_name.startswith("engine") and "concurrency_stats" in repeat_runs[0]:
                 cs0 = repeat_runs[0]["concurrency_stats"]
                 agg["concurrency"] = {
                     "encoder_pool_blocks": cs0["encoder_pool_blocks"],
@@ -581,49 +600,62 @@ def run_benchmark_suite(
                     "queue_wait_time_p50_s": float(np.mean([r["concurrency_stats"]["queue_wait_time_p50_s"] for r in repeat_runs])),
                     "queue_wait_time_p95_s": float(np.mean([r["concurrency_stats"]["queue_wait_time_p95_s"] for r in repeat_runs])),
                     "rejections_mean": float(np.mean([r["concurrency_stats"]["rejections_per_run"] for r in repeat_runs])),
+                    "peak_actually_used_mb_mean": float(np.mean([r["concurrency_stats"]["peak_actually_used_mb"] for r in repeat_runs])),
+                    "peak_actually_used_mb_std": float(np.std([r["concurrency_stats"]["peak_actually_used_mb"] for r in repeat_runs])),
                 }
+                agg["peak_actually_used_mb_mean"] = float(np.mean([r["concurrency_stats"]["peak_actually_used_mb"] for r in repeat_runs]))
+                agg["peak_actually_used_mb_std"] = float(np.std([r["concurrency_stats"]["peak_actually_used_mb"] for r in repeat_runs]))
+            else:
+                agg["concurrency"] = "not measured"
+                agg["peak_actually_used_mb_mean"] = "not measured"
+                agg["peak_actually_used_mb_std"] = "not measured"
+
             results["systems"][prof_name][sys_name] = {
                 "aggregate": agg,
                 "runs": repeat_runs,
             }
 
-    # Repeated Audio Workload (Cache ON vs Cache OFF)
-    print("\n==================================================================")
-    print("EVALUATING REPEATED-AUDIO WORKLOAD (Cache ON vs Cache OFF)")
-    print("==================================================================")
-    rep_traffic = generate_repeated_traffic(num_unique=50, seed=42)
+    if include_repeated:
+        # Repeated Audio Workload (Cache ON vs Cache OFF)
+        print("\n==================================================================")
+        print("EVALUATING REPEATED-AUDIO WORKLOAD (Cache ON vs Cache OFF)")
+        print("==================================================================")
+        results["repeated_workload"] = {}
+        rep_traffic = generate_repeated_traffic(num_unique=50, seed=42)
 
-    for cache_mode, retain_cache in [("cache_off", False), ("cache_on", True)]:
-        print(f"\n--- Repeated Workload: {cache_mode} ({num_repeats} repeats) ---")
-        repeat_runs = []
-        for rep in range(num_repeats):
-            print(f"  [Repeat {rep+1}/{num_repeats}] running {cache_mode}...", end="", flush=True)
-            run_res = bench.run_engine(rep_traffic, max_batch_size=batch_size, retain_encoder_cache=retain_cache)
-            telem = run_res["encoder_telemetry"]
-            print(f" Done in {run_res['wall_time_s']:.2f}s | Encoder calls: {telem['encoder_calls']}, Skipped: {telem['encoder_calls_skipped']}, Time saved: {telem['encode_time_saved_s']:.2f}s")
-            repeat_runs.append(run_res)
+        for cache_mode, retain_cache in [("cache_off", False), ("cache_on", True)]:
+            print(f"\n--- Repeated Workload: {cache_mode} ({num_repeats} repeats) ---")
+            repeat_runs = []
+            for rep in range(num_repeats):
+                print(f"  [Repeat {rep+1}/{num_repeats}] running {cache_mode}...", end="", flush=True)
+                run_res = bench.run_engine(rep_traffic, max_batch_size=batch_size, retain_encoder_cache=retain_cache, cache_cross_kv=False)
+                telem = run_res["encoder_telemetry"]
+                print(f" Done in {run_res['wall_time_s']:.2f}s | Encoder calls: {telem['encoder_calls']}, Skipped: {telem['encoder_calls_skipped']}, Time saved: {telem['encode_time_saved_s']:.2f}s")
+                repeat_runs.append(run_res)
 
-        agg = {
-            "wall_time_s_mean": float(np.mean([r["wall_time_s"] for r in repeat_runs])),
-            "wall_time_s_std": float(np.std([r["wall_time_s"] for r in repeat_runs])),
-            "latency_p50_s_mean": float(np.mean([r["latency_p50_s"] for r in repeat_runs])),
-            "latency_p50_s_std": float(np.std([r["latency_p50_s"] for r in repeat_runs])),
-            "latency_p95_s_mean": float(np.mean([r["latency_p95_s"] for r in repeat_runs])),
-            "latency_p95_s_std": float(np.std([r["latency_p95_s"] for r in repeat_runs])),
-            "encoder_calls_mean": float(np.mean([r["encoder_telemetry"]["encoder_calls"] for r in repeat_runs])),
-            "encoder_calls_skipped_mean": float(np.mean([r["encoder_telemetry"]["encoder_calls_skipped"] for r in repeat_runs])),
-            "encode_time_saved_s_mean": float(np.mean([r["encoder_telemetry"]["encode_time_saved_s"] for r in repeat_runs])),
-        }
-        results["repeated_workload"][cache_mode] = {
-            "aggregate": agg,
-            "runs": repeat_runs,
-        }
+            agg = {
+                "wall_time_s_mean": float(np.mean([r["wall_time_s"] for r in repeat_runs])),
+                "wall_time_s_std": float(np.std([r["wall_time_s"] for r in repeat_runs])),
+                "latency_p50_s_mean": float(np.mean([r["latency_p50_s"] for r in repeat_runs])),
+                "latency_p50_s_std": float(np.std([r["latency_p50_s"] for r in repeat_runs])),
+                "latency_p95_s_mean": float(np.mean([r["latency_p95_s"] for r in repeat_runs])),
+                "latency_p95_s_std": float(np.std([r["latency_p95_s"] for r in repeat_runs])),
+                "encoder_calls_mean": float(np.mean([r["encoder_telemetry"]["encoder_calls"] for r in repeat_runs])),
+                "encoder_calls_skipped_mean": float(np.mean([r["encoder_telemetry"]["encoder_calls_skipped"] for r in repeat_runs])),
+                "encode_time_saved_s_mean": float(np.mean([r["encoder_telemetry"]["encode_time_saved_s"] for r in repeat_runs])),
+            }
+            results["repeated_workload"][cache_mode] = {
+                "aggregate": agg,
+                "runs": repeat_runs,
+            }
 
     # Save to JSON
     out_file = Path(output_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     print(f"\nAll benchmark results successfully saved to {out_file}!")
+    return results
 
 
 if __name__ == "__main__":
@@ -632,10 +664,17 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", type=int, default=3, help="Number of measured repeats per condition (default: 3)")
     parser.add_argument("--num-samples", type=int, default=100, help="Number of utterances to benchmark (default: 100)")
     parser.add_argument("--batch-size", type=int, default=4, help="Max batch size for batching/engine (default: 4)")
-    parser.add_argument("--output", type=str, default="data/real_speech_evaluation_results.json", help="Output JSON path")
+    parser.add_argument("--output", type=str, default="data/real_speech_evaluation_results_v2.json", help="Output JSON path")
+    parser.add_argument("--include-repeated", action="store_true", help="Also evaluate repeated workload (cache on vs off)")
     parser.add_argument("--quick", action="store_true", help="Quick smoke test (5 samples, 1 repeat)")
     args = parser.parse_args()
 
     reps = 1 if args.quick else args.repeats
     samples_count = 5 if args.quick else args.num_samples
-    run_benchmark_suite(num_repeats=reps, max_samples=samples_count, batch_size=args.batch_size, output_path=args.output)
+    run_benchmark_suite(
+        num_repeats=reps,
+        max_samples=samples_count,
+        batch_size=args.batch_size,
+        output_path=args.output,
+        include_repeated=args.include_repeated,
+    )

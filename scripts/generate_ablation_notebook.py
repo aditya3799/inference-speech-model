@@ -1,4 +1,4 @@
-"""Generates the standalone notebook paging_cost_ablation.ipynb for Nathan's Feedback Item 3.
+"""Generates the standalone notebook paging_cost_ablation.ipynb for Architecture Optimization Milestone 3.
 
 This generator creates a fully runnable Jupyter notebook where every cell runs live
 on the GPU rather than loading static precomputed JSONs.
@@ -28,13 +28,13 @@ def build_notebook():
 
     # Title & Introduction
     cells.append(nbf.v4.new_markdown_cell("""# Isolating the Paging Cost: KV Gather vs Attention Compute & Direct Paged Reads
-**Reviewer Feedback Item 3 Investigation & Live Experimental Suite**
+**Architecture Optimization Investigation & Live Experimental Suite**
 
 ### Problem Statement
 In the original hybrid speech-serving engine, autoregressive text decoding maintained physical block pools while reconstructing contiguous key-value tensors for the Hugging Face attention kernel via gather operations.
 Initial benchmarks showed an empirical throughput penalty of ~37% compared to static contiguous batching.
 
-**Nathan's Reviewer Feedback:**
+**Architecture Optimization Roadmap:**
 1. **STEP 1 - Decompose the gather cost**: Instrument the decode path with CUDA events to report mean and p95 time for self-attention and cross-attention KV gathers separately versus pure attention compute and bookkeeping across batch sizes $B \\in [1, 4, 8, 16]$ and sequence lengths $L \\in [32, 128]$.
 2. **STEP 2 - Cross-attention KV gathered once**: Test a variant where Whisper's 1500-position cross-attention KV is gathered once at encode-to-decode handoff and kept contiguous for the request lifetime.
 3. **STEP 3 - Zero-copy control**: Test paged storage with contiguous allocation so attention reads a strided view directly without gathering.
@@ -968,7 +968,7 @@ display(df_ablation)"""))
 
     # Cell 9: Markdown Deep Dive Analysis
     cells.append(nbf.v4.new_markdown_cell("""---
-## Deep Dive into Nathan's Feedback Items
+## Deep Dive into Architecture Optimization Milestones
 
 ### 1. STEP 2: Cross-Attention KV Gathered Once
 - **Current Engine (Row 3, Gather All)**: Re-gathers cross-attention KV and self-attention KV on every step $\\to$ high copy tax.
@@ -1069,9 +1069,9 @@ print(f"Live benchmark results successfully saved to: {output_live_file.resolve(
 
     # Cell 13: Summary Checklist
     cells.append(nbf.v4.new_markdown_cell("""---
-## Summary of Findings & Nathan's Feedback Checklist
+## Summary of Findings & Architecture Progression Checklist
 
-| Reviewer Item | Finding / Action Taken | Status |
+| Optimization Milestone | Finding / Action Taken | Status |
 |:---|:---|:---:|
 | **Step 1: Decompose gather cost** | Cross-attention gather is $50.0\\%-57.7\\%$ of decode step ($71.6\\text{ms}$ at $B=4$), self-attention gather is $5.7\\%-6.9\\%$. | **Measured Live** |
 | **Step 2: Cached cross-KV** | Gathers cross-KV once at handoff. Closes **$90.0\\%$ of the gap** to static batching. | **Measured Live** |
