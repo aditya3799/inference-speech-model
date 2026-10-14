@@ -1,4 +1,16 @@
 {
+  "session_id": "session_20261015_002908_7fab55",
+  "timestamp": "2026-10-15T00:29:08.225324",
+  "telemetry_under_load": {
+    "sample_count": 47,
+    "median_clock_mhz": 1132.0,
+    "min_clock_mhz": 210.0,
+    "max_clock_mhz": 1575.0,
+    "max_temp_c": 55.0,
+    "mean_power_w": 12.171063829787231,
+    "throttle_sample_pct": 0.0,
+    "throttled_samples_count": 0
+  },
   "static_batching": {
     "system": "static_batching",
     "model_weights_mb": 138.51171875,

@@ -1,110 +1,112 @@
 {
+  "session_id": "session_20261015_000331_0e9c72",
+  "timestamp": "2026-10-15T00:03:31.479811",
   "tail_decomposition": {
     "static_batching": {
-      "p95_threshold_s": 0.7321364879777149,
+      "p95_threshold_s": 1.3419163323673273,
       "tail_requests_latency_gte_p95": {
         "count": 5,
-        "mean_total_latency_s": 0.8268566088384659,
-        "mean_admission_wait_s": 0.32522572883845485,
-        "admission_wait_share_pct": 39.332784591915946,
-        "mean_ttft_s": 0.03971078000001853,
-        "ttft_share_pct": 4.802619895099175,
-        "mean_decode_time_s": 0.46192009999999756,
-        "decode_time_share_pct": 55.86459551298548,
-        "shares_sum_pct": 100.0000000000006
+        "mean_total_latency_s": 1.4482150219038885,
+        "mean_admission_wait_s": 0.8237433619039433,
+        "admission_wait_share_pct": 56.87990729588023,
+        "mean_ttft_s": 0.060916619999625256,
+        "ttft_share_pct": 4.206324273555838,
+        "mean_decode_time_s": 0.5635550400002103,
+        "decode_time_share_pct": 38.91376843055636,
+        "shares_sum_pct": 99.99999999999243
       },
       "all_requests_mean": {
         "count": 100,
-        "mean_total_latency_s": 0.4455174123651125,
-        "mean_admission_wait_s": 0.12934097836510358,
-        "admission_wait_share_pct": 29.03163260858264,
-        "mean_ttft_s": 0.035818995000003045,
-        "ttft_share_pct": 8.039864213129452,
-        "mean_decode_time_s": 0.28035743900000737,
-        "decode_time_share_pct": 62.92850317828824,
+        "mean_total_latency_s": 0.853296664364243,
+        "mean_admission_wait_s": 0.31263655536429996,
+        "admission_wait_share_pct": 36.638670748494356,
+        "mean_ttft_s": 0.054532046999920564,
+        "ttft_share_pct": 6.390748877537239,
+        "mean_decode_time_s": 0.48612806200002523,
+        "decode_time_share_pct": 56.97058037396873,
         "shares_sum_pct": 100.00000000000033
       }
     },
     "engine_baseline": {
-      "p95_threshold_s": 3.4596187443199256,
+      "p95_threshold_s": 8.154678634818811,
       "tail_requests_latency_gte_p95": {
         "count": 5,
-        "mean_total_latency_s": 3.7001606136346483,
-        "mean_admission_wait_s": 1.8663540136347059,
-        "admission_wait_share_pct": 50.43981082219553,
-        "mean_ttft_s": 0.0987912199999755,
-        "ttft_share_pct": 2.6699170743005505,
-        "mean_decode_time_s": 1.7350153799999817,
-        "decode_time_share_pct": 46.890272103504316,
-        "shares_sum_pct": 100.0000000000004
+        "mean_total_latency_s": 8.727454923600817,
+        "mean_admission_wait_s": 6.929511323600609,
+        "admission_wait_share_pct": 79.39899299693658,
+        "mean_ttft_s": 0.09983345999935408,
+        "ttft_share_pct": 1.143901181653589,
+        "mean_decode_time_s": 1.6981101400004264,
+        "decode_time_share_pct": 19.457105821404937,
+        "shares_sum_pct": 99.99999999999511
       },
       "all_requests_mean": {
         "count": 100,
-        "mean_total_latency_s": 1.6007359443650853,
-        "mean_admission_wait_s": 0.8241047963650844,
-        "admission_wait_share_pct": 51.482869443027134,
-        "mean_ttft_s": 0.07781878899999811,
-        "ttft_share_pct": 4.861438219959764,
-        "mean_decode_time_s": 0.6988123590000044,
-        "decode_time_share_pct": 43.6556923370132,
-        "shares_sum_pct": 100.0000000000001
+        "mean_total_latency_s": 5.310148685364893,
+        "mean_admission_wait_s": 4.137944029364864,
+        "admission_wait_share_pct": 77.9252008662074,
+        "mean_ttft_s": 0.11028455500007112,
+        "ttft_share_pct": 2.0768637854533596,
+        "mean_decode_time_s": 1.0619201009999415,
+        "decode_time_share_pct": 19.99793534833894,
+        "shares_sum_pct": 99.9999999999997
       }
     }
   },
   "service_capacity": {
     "static_batching": {
-      "burst_wall_time_s_mean": 11.15522199999998,
-      "service_capacity_req_per_sec_mean": 8.980171862996189,
-      "service_capacity_req_per_sec_std": 0.3726075722233596,
+      "burst_wall_time_s_mean": 17.98337696666628,
+      "service_capacity_req_per_sec_mean": 5.630674075766428,
+      "service_capacity_req_per_sec_std": 0.6455619659095441,
       "arrival_rate_req_per_sec": 4.0,
-      "capacity_margin_req_per_sec": 4.980171862996189,
+      "capacity_margin_req_per_sec": 1.6306740757664278,
       "queue_stable_under_4_req_sec": true
     },
     "engine_baseline": {
-      "burst_wall_time_s_mean": 19.63543660000001,
-      "service_capacity_req_per_sec_mean": 5.101121498662504,
-      "service_capacity_req_per_sec_std": 0.2061609736842727,
+      "burst_wall_time_s_mean": 27.954420000000635,
+      "service_capacity_req_per_sec_mean": 3.5804253412217015,
+      "service_capacity_req_per_sec_std": 0.10575126723347249,
       "arrival_rate_req_per_sec": 4.0,
-      "capacity_margin_req_per_sec": 1.1011214986625042,
-      "queue_stable_under_4_req_sec": true
+      "capacity_margin_req_per_sec": -0.41957465877829847,
+      "queue_stable_under_4_req_sec": false
     },
     "engine_no_sync": {
-      "burst_wall_time_s_mean": 19.493812566666673,
-      "service_capacity_req_per_sec_mean": 5.132478205960847,
-      "service_capacity_req_per_sec_std": 0.1174182825425187,
+      "burst_wall_time_s_mean": 26.030571066665896,
+      "service_capacity_req_per_sec_mean": 3.870126626264753,
+      "service_capacity_req_per_sec_std": 0.3421141948305249,
       "arrival_rate_req_per_sec": 4.0,
-      "capacity_margin_req_per_sec": 1.1324782059608474,
-      "queue_stable_under_4_req_sec": true
+      "capacity_margin_req_per_sec": -0.1298733737352471,
+      "queue_stable_under_4_req_sec": false
     },
     "engine_batch_encoder": {
-      "burst_wall_time_s_mean": 18.489705533333336,
-      "service_capacity_req_per_sec_mean": 5.41563765195838,
-      "service_capacity_req_per_sec_std": 0.19549075595080337,
+      "burst_wall_time_s_mean": 25.24377153333262,
+      "service_capacity_req_per_sec_mean": 4.002859645198919,
+      "service_capacity_req_per_sec_std": 0.4224406988509505,
       "arrival_rate_req_per_sec": 4.0,
-      "capacity_margin_req_per_sec": 1.41563765195838,
+      "capacity_margin_req_per_sec": 0.002859645198919125,
       "queue_stable_under_4_req_sec": true
     },
     "engine_avoid_redundant": {
-      "burst_wall_time_s_mean": 18.860716766666656,
-      "service_capacity_req_per_sec_mean": 5.303696516904523,
-      "service_capacity_req_per_sec_std": 0.0939011179544632,
+      "burst_wall_time_s_mean": 26.809012066666885,
+      "service_capacity_req_per_sec_mean": 3.773195685554842,
+      "service_capacity_req_per_sec_std": 0.4174073767145005,
       "arrival_rate_req_per_sec": 4.0,
-      "capacity_margin_req_per_sec": 1.3036965169045232,
-      "queue_stable_under_4_req_sec": true
+      "capacity_margin_req_per_sec": -0.22680431444515792,
+      "queue_stable_under_4_req_sec": false
     }
   },
   "encoder_analysis": {
     "static_batching": {
-      "encoder_ms_per_request": 151.03314999942086,
-      "mean_generated_tokens": 28.54,
-      "mean_execution_time_ms": 316.17643400001043,
-      "encoder_share_of_execution_pct": 47.76862971369203
+      "encoder_ms_per_request": 12.283524999929796,
+      "mean_generated_tokens": 28.55,
+      "mean_execution_time_ms": 540.6601089999458,
+      "encoder_share_of_execution_pct": 2.2719495659945252
     },
     "engine_baseline": {
-      "encoder_ms_per_request": 170.34359999888693,
+      "encoder_ms_per_request": 12.243099999977858,
       "mean_generated_tokens": 28.56,
-      "mean_execution_time_ms": 776.6311480000024,
-      "encoder_share_of_execution_pct": 21.933655434443942
+      "mean_execution_time_ms": 1172.2046560000126,
+      "encoder_share_of_execution_pct": 1.0444507226029758
     }
   },
   "queue_wait_documentation": {

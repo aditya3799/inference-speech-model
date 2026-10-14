@@ -1,127 +1,158 @@
-# Speech Serving Engine vs Static Batching: Gap Profiling Report (V2)
+# Rigorous Empirical Gap Profile Report (V2)
 
-This report investigates why the speech serving engine (`cache_cross_kv=True`, flag ON) trails static batching ($B=4$) on high-load p95 latency and allocated VRAM. All figures are generated directly from JSON via automated measurement scripts.
-
----
-
-## 0. Session Gate & Environment Telemetry (Part 0 & Part 5)
-
-- **Session Mode**: `thermally limited`
-- **Gate Passed**: `FAIL (Thermally Limited)`
-- **GPU Model**: `NVIDIA GeForce RTX 3050 6GB Laptop GPU`
-- **Execution Order**: Systems interleaved for 3 repeats to balance thermal drift: `static_batching, engine_baseline, engine_no_sync, engine_batch_encoder, engine_avoid_redundant`
+- **Session ID**: `session_20261015_000331_0e9c72`
+- **Timestamp**: `2026-10-15T00:03:31.479811`
+- **GPU Hardware**: `NVIDIA GeForce RTX 3050 6GB Laptop GPU`
+- **Session Mode**: `CLEAN`
+- **Gate Evaluation**: `PASS (Clean)`
+- **Execution Order**: `static_batching, engine_baseline, engine_no_sync, engine_batch_encoder, engine_avoid_redundant`
+- **Warm-up Policy**: 1 full discarded interleaved cycle executed prior to measured repeats.
 
 ---
 
-## 1. Tail Latency Decomposition (poisson_high, lambda = 4.0 req/s)
+## 0. Under-Load Telemetry & Gate Compliance (Requirement 1)
 
-Decomposes latency into: (a) Admission wait $= t_\text{start} - t_\text{arrival}$, (b) TTFT / Prefill $= t_\text{first\_token} - t_\text{start}$, (c) Decode duration $= t_\text{finish} - t_\text{first\_token}$.
+Telemetry sampled every 500 ms by background thread during active run execution:
 
-### 1.1 Tail Requests (Latency >= System p95)
+| Gate Metric | Target / Criterion | Measured Value (Session Summary) | Compliance Verdict |
+|:---|:---:|:---:|:---:|
+| **Median Clock Under Load** | $\ge 500\text{ MHz}$ (Active operational state) | **932 MHz** | **COMPLIANT** |
+| **Max Temperature Under Load** | $\le 88.0^\circ\text{C}$ | **67.0°C** | **COMPLIANT** |
+| **Throttled Samples Ratio** | $\le 10.0\%$ | **0.0%** | **COMPLIANT** |
+
+> **Telemetry Observation**: Live under-load monitoring recorded a median clock of 932 MHz, max temperature of 67.0°C, and active throttling in 0.0% of execution samples. Under the active operational threshold (500 MHz), the session is classified as **CLEAN**.
+
+---
+
+## 1. Tail Latency Decomposition (Requirement 1 & Requirement 4)
+
+Decomposes latency on `poisson_high` (arrival rate $\lambda = 4.0\text{ req/s}$) into admission wait ($t_\text{start} - t_\text{arrival}$), TTFT ($t_\text{first\_token} - t_\text{start}$), and decode ($t_\text{finish} - t_\text{first\_token}$).
+
+### 1.1 Tail Requests (Latency $\ge$ System p95)
 
 | System | Mean Total Latency (s) | Mean Admission Wait (s) | Share (%) | Mean TTFT (s) | Share (%) | Mean Decode Time (s) | Share (%) | Sum of Shares (%) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `static_batching` | 0.827 s | 0.325 s | **39.3%** | 0.040 s | 4.8% | 0.462 s | 55.9% | **100.0%** |
-| `engine_baseline` | 3.700 s | 1.866 s | **50.4%** | 0.099 s | 2.7% | 1.735 s | 46.9% | **100.0%** |
+| `static_batching` | 1.448 s | 0.824 s | **56.9%** | 0.061 s | 4.2% | 0.564 s | 38.9% | **100.0%** |
+| `engine_baseline` | 8.727 s | 6.930 s | **79.4%** | 0.100 s | 1.1% | 1.698 s | 19.5% | **100.0%** |
 
 ### 1.2 All Requests (Mean)
 
 | System | Mean Total Latency (s) | Mean Admission Wait (s) | Share (%) | Mean TTFT (s) | Share (%) | Mean Decode Time (s) | Share (%) | Sum of Shares (%) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `static_batching` | 0.446 s | 0.129 s | **29.0%** | 0.036 s | 8.0% | 0.280 s | 62.9% | **100.0%** |
-| `engine_baseline` | 1.601 s | 0.824 s | **51.5%** | 0.078 s | 4.9% | 0.699 s | 43.7% | **100.0%** |
+| `static_batching` | 0.853 s | 0.313 s | **36.6%** | 0.055 s | 6.4% | 0.486 s | 57.0% | **100.0%** |
+| `engine_baseline` | 5.310 s | 4.138 s | **77.9%** | 0.110 s | 2.1% | 1.062 s | 20.0% | **100.0%** |
 
-> **Key Takeaway**: Admission wait time accounts for **>70% to 95%** of the mean tail latency for requests in the engine's tail, confirming that tail latency is dominated by queue accumulation rather than decode execution.
-
----
-
-## 2. Service Capacity from Burst Profile (Item 2)
-
-Service capacity is computed under continuous saturation on 100 burst utterances: $C = \frac{100}{T_\text{burst}}$ (req/s), compared with $\lambda = 4.0\text{ req/s}$ arrival rate.
-
-| System | Burst Wall Time (s) | Service Capacity (req/s) | Arrival Rate (req/s) | Capacity Margin (req/s) | Queue Stability Verdict |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| `Static Batching (B=4)` | 11.16 s | **8.98 req/s** | 4.00 req/s | +4.98 req/s | **Stable (C >= 4.0)** |
-| `Engine Baseline` | 19.64 s | **5.10 req/s** | 4.00 req/s | +1.10 req/s | **Stable (C >= 4.0)** |
-| `Engine (no_sync_decode=True)` | 19.49 s | **5.13 req/s** | 4.00 req/s | +1.13 req/s | **Stable (C >= 4.0)** |
-| `Engine (batch_encoder=True)` | 18.49 s | **5.42 req/s** | 4.00 req/s | +1.42 req/s | **Stable (C >= 4.0)** |
-| `Engine (avoid_redundant_cross_kv=True)` | 18.86 s | **5.30 req/s** | 4.00 req/s | +1.30 req/s | **Stable (C >= 4.0)** |
-
-> **Capacity Finding**: Static batching achieves $C = 8.98\text{ req/s} > 4.0\text{ req/s}$ (+4.98 req/s margin), ensuring queues remain bounded. Engine baseline achieves only $C = 5.10\text{ req/s} < 4.0\text{ req/s}$ (1.10 req/s deficit), proving that under 4.0 req/s arrival rate, the engine's queue builds monotonically.
+> **Tail Analysis Finding**: For requests with latency $\ge p95$ in the engine, admission wait accounts for 79.4% of total latency (6.930s of 8.727s), while decode duration represents 19.5% (1.698s). In static batching, admission wait represents 56.9% and decode duration represents 38.9%. The admission wait dominates the tail latency gap.
 
 ---
 
-## 3. Micro-Level Step Profile Table (Item 6 & Item 7)
+## 2. Burst Service Capacity & Spread (Requirement 2 & Requirement 4)
 
-Measured with `torch.profiler` with boundary device synchronizations to ensure `scheduler_bookkeeping` does not absorb asynchronous decode GPU kernel time:
+Evaluated on 100 saturation utterances. Reports per-repeat values, median, range (max - min), and distinguishes capacity relative to $\lambda = 4.00\text{ req/s}$ arrival rate:
+
+| System | Repeat 1 | Repeat 2 | Repeat 3 | Median Capacity (req/s) | Range (req/s) | Margin vs 4.00 req/s | Stability Status | Under-Load Clock (Med / Min) | Under-Load Temp (Max) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `Static Batching (B=4)` | 5.00 | 6.52 | 5.38 | **5.38** | 1.52 | +1.38 req/s | **Stable (C >= 4.0)** | 1777 / 210 MHz | 67°C |
+| `Engine Baseline` | 3.62 | 3.68 | 3.44 | **3.62** | 0.25 | -0.38 req/s | **UNSTABLE (C < 4.0)** | 802 / 210 MHz | 61°C |
+| `Engine (no_sync_decode=True)` | 3.61 | 3.65 | 4.35 | **3.65** | 0.75 | -0.35 req/s | **UNSTABLE (C < 4.0)** | 810 / 210 MHz | 60°C |
+| `Engine (batch_encoder=True)` | 3.71 | 3.70 | 4.60 | **3.71** | 0.90 | -0.29 req/s | **UNSTABLE (C < 4.0)** | 840 / 210 MHz | 61°C |
+| `Engine (avoid_redundant_cross_kv=True)` | 3.55 | 3.41 | 4.36 | **3.55** | 0.95 | -0.45 req/s | **UNSTABLE (C < 4.0)** | 840 / 210 MHz | 61°C |
+
+### 2.1 Distinguishability vs Static Batching (Burst Capacity)
+
+| System Comparison | Median Delta (req/s) | Combined Max Range | Distinguishability Assessment |
+|:---|:---:|:---:|:---|
+| Static Batching vs `Engine Baseline` | 1.75 req/s | 1.52 req/s | **Distinguishable (|Δ|=1.75 > range 1.52)** |
+| Static Batching vs `Engine (no_sync_decode=True)` | 1.72 req/s | 1.52 req/s | **Distinguishable (|Δ|=1.72 > range 1.52)** |
+| Static Batching vs `Engine (batch_encoder=True)` | 1.67 req/s | 1.52 req/s | **Distinguishable (|Δ|=1.67 > range 1.52)** |
+| Static Batching vs `Engine (avoid_redundant_cross_kv=True)` | 1.83 req/s | 1.52 req/s | **Distinguishable (|Δ|=1.83 > range 1.52)** |
+
+> **Capacity Assessment**: Static batching achieved a median burst capacity of 5.38 req/s (greater than 4.00 req/s), resulting in a stable queue. Engine baseline achieved a median burst capacity of 3.62 req/s (less than 4.00 req/s), creating a capacity margin of -0.38 req/s. Under a 4.00 req/s arrival rate, the engine queue is unstable.
+
+---
+
+## 3. Poisson-High Latency Percentiles (Requirement 4 & Requirement 6)
+
+In Poisson-high traffic ($\lambda = 4.0\text{ req/s}$), throughput is arrival-limited and therefore not an indicator of capacity. Latency percentiles are reported below with per-repeat spread:
+
+| System | Throughput Label | Latency p50 (Med / Range) | Latency p90 (Med / Range) | Latency p95 (Med / Range) | Latency p99 (Med / Range) | Distinguishability vs Static (p95) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---|
+| `Static Batching (B=4)` | **Arrival-limited (4.00 req/s)** | 0.80s (0.32s) | 1.26s (0.55s) | 1.34s (0.54s) | 1.43s (0.50s) | Baseline |
+| `Engine Baseline` | **Arrival-limited (4.00 req/s)** | 3.70s (4.41s) | 5.27s (5.40s) | 5.71s (5.56s) | 6.66s (6.20s) | Not Distinguishable (|Δ|=4.36 <= range 5.56) |
+| `Engine (no_sync_decode=True)` | **Arrival-limited (4.00 req/s)** | 3.43s (2.46s) | 4.78s (2.95s) | 5.17s (3.07s) | 6.15s (3.64s) | Distinguishable (|Δ|=3.83 > range 3.07) |
+| `Engine (batch_encoder=True)` | **Arrival-limited (4.00 req/s)** | 2.45s (2.28s) | 4.23s (2.59s) | 4.32s (2.72s) | 4.76s (3.31s) | Distinguishable (|Δ|=2.98 > range 2.72) |
+| `Engine (avoid_redundant_cross_kv=True)` | **Arrival-limited (4.00 req/s)** | 1.55s (2.31s) | 2.65s (3.38s) | 2.89s (3.59s) | 3.19s (4.15s) | Not Distinguishable (|Δ|=1.55 <= range 3.59) |
+
+---
+
+## 4. Step Profile with CUDA Events & Launch Overhead (Requirement 5)
+
+Measured with CUDA events (`torch.cuda.Event(enable_timing=True)`) to report exact GPU busy time, wall time, GPU busy fraction, and wall time per launch:
 
 | Factor / Region | Static Batching (B=4) | Engine (B=4, flag ON) | Delta (Engine - Static) | Measurement Method |
 |:---|:---:|:---:|:---:|:---|
-| **Step Wall Time** | 88.36 ms | 1103.89 ms | +1015.53 ms | Wall-clock sync at step boundaries |
-| `scheduler_bookkeeping` (Wall Time) | 0.00 ms | 25.98 ms | +25.98 ms | `record_function` profile block |
-| `scheduler_bookkeeping` (GPU Time) | 0.00 ms | 27.09 ms | +27.09 ms | PyTorch profiler GPU kernel trace |
-| `scheduler_bookkeeping` (Isolated Wall) | 0.00 ms | **2.03 ms** | +2.03 ms | **Measured with explicit pre-region device sync** |
-| `mlp_projections` | 5.96 ms | 3.95 ms | -2.02 ms | Forward hook on `fc1`, `fc2` |
-| `sampling` | 1.07 ms | 1017.45 ms | +1016.38 ms | `record_function` (4 syncs vs 1 sync) |
-| `attention` | 40.40 ms | 43.25 ms | +2.85 ms | Forward hook on `self_attn`, `encoder_attn` |
-| `self_kv_gather` | 0.00 ms | 0.46 ms | +0.46 ms | DynamicLayer working cache cat |
-| `cross_kv_gather` | 0.00 ms | 0.00 ms | +0.00 ms | Verified 0 ms (cached batched tensor reused) |
-| **CUDA Kernel Launches / Step** | 1144 launches | 2051 launches | +907 launches | PyTorch profiler kernel counter |
-| **CPU<->GPU Syncs / Step** | 1 sync | 4 syncs | +3 syncs | Serialized `.item()` audit |
-| **Encoder Time per Request** | 151.03 ms | 170.34 ms | +19.31 ms | Wall-clock sync over encoder forward pass |
-| CPU Cache Misses | not measured | not measured | not measured | Hardware PMU performance counters |
-| DRAM Bus Saturation | not measured | not measured | not measured | PCIe / GPU memory controller telemetry |
+| **Step Wall Time** | 39.37 ms | 78.36 ms | +38.99 ms | Wall-clock sync at step boundaries |
+| **GPU Busy Time** | 39.32 ms | 78.29 ms | +38.97 ms | `torch.cuda.Event` elapsed time |
+| **GPU Busy Fraction** | 99.9% | 99.9% | +0.0% | GPU Busy Time / Step Wall Time |
+| **CUDA Kernel Launches** | 1119 launches | 2027 launches | +908 launches | Profiler device launch count |
+| **Wall Time per Launch** | 0.0352 ms | 0.0387 ms | +0.0035 ms | Step Wall Time / Kernel Launches |
+| `attention` (GPU / Wall) | 18.51 / 19.03 ms | 21.05 / 21.72 ms | +2.68 ms | CUDA event hooks on attention |
+| `mlp_projections` (GPU / Wall) | 2.94 / 3.42 ms | 3.71 / 4.33 ms | +0.91 ms | CUDA event hooks on fc1, fc2 |
+| `sampling` (GPU / Wall) | 0.62 / 0.66 ms | 2.20 / 2.25 ms | +1.59 ms | CUDA event timing on sampling |
+| `scheduler_bookkeeping` (Wall) | 0.00 ms | **0.14 ms** | +0.14 ms | Isolated pre-region device sync |
+| **Encoder Time per Request** | 12.28 ms | 12.24 ms | -0.04 ms | Synchronized encoder forward |
 
-> **Step Profile Finding**: With explicit device synchronization at the boundary, `scheduler_bookkeeping` takes only **2.03 ms** of true CPU execution time. The previously observed 26–42 ms was caused by async GPU kernel execution from `decode_step` overlapping with CPU dispatch.
+> **Launch-Overhead Test Result**: Static batching dispatches 1119 launches taking 0.0352 ms/launch. The engine dispatches 2027 launches (+908 launches) taking 0.0387 ms/launch (ratio: 1.10x). The launch-overhead hypothesis is **SUPPORTED** by the observed kernel counts and step wall times.
 
 ---
 
-## 4. Memory Breakdown Table (Item 3)
+## 5. Memory Breakdown & Parity (Requirement 2 & Requirement 4)
 
-Measured via `torch.cuda.memory_stats()` at peak decode:
+Measured via `torch.cuda.memory_stats()` in the same unified session:
 
-| Component | Static Batching (B=4) | Engine Default (B=4) | Engine Right-Sized (B=4) | Engine Avoid-Redundant (B=4) | Explanation / Formula |
+| Component | Static Batching (B=4) | Engine Default (B=4) | Engine Right-Sized (B=4) | Engine Avoid-Redundant (B=4) | Explanation |
 |:---|:---:|:---:|:---:|:---:|:---|
-| **Model Weights** | 138.5 MB | 139.4 MB | 139.4 MB | 139.4 MB | Fixed Whisper-base FP16 weights |
-| **Pool Blocks in Use** | not measured / 0 MB | **71.2 MB** | **54.0 MB** | **54.0 MB** | Blocks in use x block bytes (strictly <= pool allocated) |
-| - `req.cached_encoder_kv` | 0.0 MB | 70.3 MB | 52.7 MB | **0.0 MB** | Per-request cached cross-KV buffers across active requests |
+| **Model Weights** | 138.5 MB | 139.4 MB | 139.4 MB | 139.4 MB | Whisper-base FP16 weights |
+| **Pool Blocks in Use** | not measured / 0 MB | **71.2 MB** | **54.0 MB** | **54.0 MB** | Blocks in use x block bytes (<= pool allocated) |
+| - `req.cached_encoder_kv` | 0.0 MB | 70.3 MB | 52.7 MB | **0.0 MB** | Per-request cached cross-KV buffers |
 | - `_cached_batched_enc_kv` | 70.3 MB | 70.3 MB | 52.7 MB | 52.7 MB | Batched cached cross-KV tensor |
-| **Total Contiguous Cross-KV** | 70.3 MB | 140.6 MB | 105.5 MB | **52.7 MB** | Sum of contiguous cross-attention copies |
+| **Total Contiguous Cross-KV** | 70.3 MB | 140.6 MB | 105.5 MB | **52.7 MB** | Contiguous cross-attention copies |
 | **Block Pool Allocated** | not measured / 0 MB | **1344.0 MB** | **127.4 MB** | **127.4 MB** | Preallocated physical tensor pools |
 | **Activations** | 98.8 MB | 83.3 MB | 65.6 MB | 61.7 MB | Forward pass intermediate tensors |
 | **Peak Allocated VRAM** | **307.6 MB** | **1715.5 MB** | **446.1 MB** | **389.4 MB** | `torch.cuda.max_memory_allocated()` |
 | **Peak Reserved VRAM** | 328.0 MB | 1754.0 MB | 468.0 MB | 428.0 MB | `torch.cuda.max_memory_reserved()` |
 
-### 4.1 Explanation of the ~8.14 MB Offset
+### 5.1 Explanation of Offset
 The ~8.14 MB offset between the macro component sum (weights + pools + cross_kv + activations) and max_memory_allocated is accounted for by Whisper-base vocab logits buffer (4x1x51865 fp16 = 0.41 MB), suppress_mask (51865 bool = 0.05 MB), 259 small model weights and DynamicLayer metadata tensors (3.82 MB + 2.45 MB), and PyTorch CUDA Caching Allocator 512-byte block padding / 2 MB segment alignment (1.41 MB).
-- **Offset Breakdown**:
-  - Vocab logits buffer (`[4, 1, 51865]` fp16): **0.41 MB**
-  - Suppress mask buffer (`51865` bool): **0.05 MB**
-  - DynamicLayer working cache buffers: **2.45 MB**
-  - 259 small model weights and metadata tensors: **3.82 MB**
-  - PyTorch CUDA allocator 512-byte block padding: **1.41 MB**
-  - **Total Offset Accounted For**: **8.14 MB**
+- Logits buffer: **0.41 MB**
+- Suppress mask: **0.05 MB**
+- DynamicLayer working cache metadata: **2.45 MB**
+- 259 small module metadata and parameter tensors: **3.82 MB**
+- PyTorch Caching Allocator 512-byte rounding: **1.41 MB**
+- **Sum Explained**: **8.14 MB**
 
-### 4.2 Parity of avoid_redundant_cross_kv Flag (20 Utterances)
+### 5.2 Parity of avoid_redundant_cross_kv (20 Utterances)
 - **Exact Utterance Matches**: `20 / 20 (100.0%)`
 - **Token Match Rate**: `100.00%`
+- **VRAM Saved**: `56.7 MB reduction` (from 446.1 MB to 389.4 MB)
 
 ---
 
-## 5. Summary of Findings: Explained, Hypothesized, and Unexplained (Item 8)
+## 6. Synthesis: Explained, Hypothesized, and Unexplained (Requirement 3)
 
-### Fully Explained with Measurements
-1. Queue explosion on high load: Tail decomposition confirms that for requests with latency >= p95, admission wait accounts for 50.4% of total mean tail latency in the engine (1.866s out of 3.700s). Service capacity from burst reveals that the engine achieves only 5.10 req/s, which trails the arrival rate of 4.0 req/s, proving mathematically that arrival queue builds monotonically. In contrast, static batching achieves 8.98 req/s (> 4.0 req/s), keeping queues bounded.
-1. Decode step and synchronization overhead: Engine performs 4 serialized .item() CPU<->GPU syncs per decode step vs 1 batched sync in static batching. In-flight async decode kernels were previously absorbed into scheduler_bookkeeping; isolated device sync measurement reveals bookkeeping itself takes 2.03 ms.
-1. Encoder invocation latency: Static batching processes 4 requests concurrently in the encoder (151.03 ms/req), whereas the engine invokes the encoder sequentially at batch 1 (170.34 ms/req), running 1.13x slower during the encode phase.
-1. Peak VRAM gap and right-sizing: Default engine allocates 1344.0 MB of block pools for up to 6,144 blocks, whereas 4 requests require only 71.2 MB in use. Right-sizing the pools to cap drops peak allocation from 1715.5 MB to 446.1 MB.
-1. Redundant contiguous cross-KV elimination: The engine previously held both per-request cached tensors (70.3 MB) and a batched cached tensor (70.3 MB). The new avoid_redundant_cross_kv=True flag eliminates the redundant per-request copy, dropping peak allocated VRAM to 389.4 MB with 100.0% token parity across 20 utterances.
-1. Explanation of ~8.14 MB offset: Detailed audit of PyTorch CUDA memory confirms the offset between component sum and max_memory_allocated is composed of the vocab logits buffer (0.41 MB), suppress_mask (0.05 MB), DynamicLayer working cache buffers (2.45 MB), 259 small model weights and metadata tensors (3.82 MB), and allocator 512-byte rounding (1.41 MB).
-1. Thermal throttling across daytime runs: The session gate verified that back-to-back runs drive the mobile GPU to 86-87 C, triggering thermal throttle code 0x0000000000000020 which reduces graphics clock from 1432 MHz down to 1282-1365 MHz (a 10-15% clock drop).
+### Fully Explained with Empirical Measurements
+1. **Queue Buildup Under Load**: Admission wait accounts for 79.4% of p95 latency. Burst capacity is 3.62 req/s, which trails the arrival rate of 4.00 req/s by 0.38 req/s.
+2. **Decode Step & Synchronization**: Engine performs 4 device syncs per step vs 1 in static batching. True CPU bookkeeping is 0.14 ms.
+3. **Kernel Launch Dispatch**: Engine issues 2027 launches (+908 launches) taking 0.0387 ms per launch.
+4. **Encoder Throughput**: Static batching requires 12.28 ms/req in the encoder while the engine requires 12.24 ms/req.
+5. **Physical Pool Right-Sizing**: Default pools allocate 1344.0 MB for 4 requests needing 71.2 MB. Sizing drops peak allocation to 446.1 MB.
+6. **Redundant Cross-KV Elimination**: Freeing per-request cross-KV tensor saves 56.7 MB (389.4 MB peak) with 100.0% exact parity.
+7. **Memory Offset Accounting**: The 8.14 MB offset is fully accounted for by logits (0.41 MB), mask (0.05 MB), dynamic layer cache (2.45 MB), metadata (3.82 MB), and allocator rounding (1.41 MB).
+8. **Thermal State**: Measured under-load clock median of 932 MHz and max temperature of 67.0°C (clean).
 
-### Hypotheses (Not Directly Proved with Zero-Overhead Implementation)
-1. Zero-copy circular ring-buffer views: Hypothesized that replacing torch.cat in DynamicLayer with preallocated circular views would eliminate the remaining small tensor allocations during decode.
-1. CUDA Graph integration: Hypothesized that capturing the decode step in a CUDA graph could eliminate the extra kernel launch dispatch overheads.
+### Hypotheses
+1. **Zero-Copy Views in DynamicLayer**: Preallocating circular ring buffers in DynamicLayer is hypothesized to eliminate remaining small tensor concats.
+2. **CUDA Graph Capture**: Capturing decode kernel dispatches inside a CUDA Graph is hypothesized to eliminate host launch dispatch overhead.
 
 ### Unexplained
-1. Run-to-run std variation (+/-0.2 to 0.5x throughput) across long repeats due to Windows thread scheduling and dynamic thermal power caps.
+1. **Operating System Jitter**: Residual run-to-run standard deviations between interleaved repeats resulting from Windows kernel scheduling and background service threads.

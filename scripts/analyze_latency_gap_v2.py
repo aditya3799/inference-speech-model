@@ -120,23 +120,27 @@ def analyze_capacity_and_encoder(
     }
 
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Latency Gap Analysis (V2)")
+    parser.add_argument("--session-id", type=str, default="", help="Unified session identifier")
+    parser.add_argument("--timestamp", type=str, default="", help="ISO timestamp of session")
+    args = parser.parse_args()
+
     repo_root = Path(__file__).resolve().parent.parent
     data_dir = repo_root / "data"
 
     v2_bench_file = data_dir / "real_speech_evaluation_results_profile_v2.json"
     step_file = data_dir / "step_profile_results_v2.json"
 
-    # Fallback to existing v2 file if profile_v2 is currently generating
-    if not v2_bench_file.exists():
-        v2_bench_file = data_dir / "real_speech_evaluation_results_v2.json"
-    if not step_file.exists():
-        step_file = data_dir / "step_profile_results.json"
-
     with open(v2_bench_file, "r", encoding="utf-8") as f:
         bench_data = json.load(f)
     with open(step_file, "r", encoding="utf-8") as f:
         step_data = json.load(f)
+
+    session_id = args.session_id or bench_data.get("session_id", "")
+    timestamp = args.timestamp or bench_data.get("timestamp", "")
 
     # Check structure (interleaved format vs legacy evaluate format)
     poisson_systems = (
@@ -165,6 +169,8 @@ def main():
     }
 
     output = {
+        "session_id": session_id,
+        "timestamp": timestamp,
         "tail_decomposition": tail_decomp,
         "service_capacity": cap_enc.get("service_capacity", {}),
         "encoder_analysis": cap_enc.get("encoder_analysis", {}),

@@ -42,6 +42,10 @@ from speech_serving.phase_aware_scheduler import (
 from paged_kv_cache.block_manager import BlockManager
 import soundfile as sf
 from transformers import WhisperProcessor
+import argparse
+import uuid
+from datetime import datetime
+from scripts.gpu_telemetry import GpuTelemetryMonitor
 
 
 def measure_system_memory(
@@ -267,7 +271,25 @@ def verify_avoid_redundant_parity(samples: List[Dict[str, Any]], device="cuda", 
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    parser = argparse.ArgumentParser(description="Memory Breakdown Runner (V2)")
+    parser.add_argument("--session-id", type=str, default="", help="Unified session identifier")
+    parser.add_argument("--timestamp", type=str, default="", help="ISO timestamp of session")
+    args = parser.parse_args()
+
+    session_id = args.session_id if args.session_id else f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    timestamp = args.timestamp if args.timestamp else datetime.now().isoformat()
+
+    print("==================================================================")
+    print("MEMORY BREAKDOWN & PARITY RUNNER (V2)")
+    print(f"Session ID : {session_id}")
+    print(f"Timestamp  : {timestamp}")
+    print("==================================================================")
+
+    device = "cuda"
     dtype = torch.float16
+
+    monitor = GpuTelemetryMonitor(interval_sec=0.5)
+    monitor.start()
 
     print("Loading 20 sample audios for memory breakdown & parity check...")
     processor = WhisperProcessor.from_pretrained("openai/whisper-base")
@@ -298,6 +320,8 @@ def main():
     # 5. Parity check for avoid_redundant_cross_kv
     parity_ar = verify_avoid_redundant_parity(samples, device=device, dtype=dtype, num_samples=20)
 
+    telemetry_summary = monitor.stop()
+
     # Offset breakdown explanation
     offset_explanation = {
         "observed_offset_mb": 8.14,
@@ -313,6 +337,9 @@ def main():
     }
 
     results = {
+        "session_id": session_id,
+        "timestamp": timestamp,
+        "telemetry_under_load": telemetry_summary,
         "static_batching": sb_res,
         "engine_default": eng_def_res,
         "engine_right_sized": eng_rs_res,

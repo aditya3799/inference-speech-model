@@ -1,66 +1,103 @@
 {
+  "session_id": "session_20261015_002840_b231bc",
+  "timestamp": "2026-10-15T00:28:40.780690",
+  "telemetry_under_load": {
+    "sample_count": 15,
+    "median_clock_mhz": 210.0,
+    "min_clock_mhz": 210.0,
+    "max_clock_mhz": 1830.0,
+    "max_temp_c": 55.0,
+    "mean_power_w": 7.873333333333333,
+    "throttle_sample_pct": 0.0,
+    "throttled_samples_count": 0
+  },
   "static_batching": {
-    "step_wall_ms": 88.36169999995036,
-    "gpu_kernel_ms": 198.067,
-    "kernel_launches": 1144,
+    "step_wall_ms": 39.3727000009676,
+    "gpu_busy_time_ms": 39.3191032409668,
+    "gpu_busy_fraction": 0.9986387329291747,
+    "kernel_launches": 1119,
+    "wall_time_per_launch_ms": 0.035185612154573366,
     "syncs_per_step": 1,
-    "encoder_ms_per_req": 151.03314999942086,
+    "encoder_ms_per_req": 12.283524999929796,
     "regions": {
       "attention": {
-        "wall_ms": 40.39920000000001,
-        "gpu_ms": 31.717
+        "wall_ms": 19.032800002605654,
+        "gpu_ms": 18.514144003391266,
+        "gpu_busy_fraction": 0.9727493590463104
       },
       "mlp_projections": {
-        "wall_ms": 5.962100000000006,
-        "gpu_ms": 7.309
+        "wall_ms": 3.421400006118347,
+        "gpu_ms": 2.939616024494171,
+        "gpu_busy_fraction": 0.8591851345172673
       },
       "sampling": {
-        "wall_ms": 1.0706000000000058,
-        "gpu_ms": 1.086
+        "wall_ms": 0.6644000004598638,
+        "gpu_ms": 0.624671995639801,
+        "gpu_busy_fraction": 0.9402046887529123
       },
       "scheduler_bookkeeping": {
         "wall_ms": 0.0,
-        "gpu_ms": 0.0
+        "gpu_ms": 0.0,
+        "gpu_busy_fraction": 0.0
       }
     }
   },
   "engine_flag_on": {
-    "step_wall_ms": 1103.8881999993464,
-    "gpu_kernel_ms": 1243.611,
-    "kernel_launches": 2051,
+    "step_wall_ms": 78.3633999999438,
+    "gpu_busy_time_ms": 78.28816223144531,
+    "gpu_busy_fraction": 0.9990398863691655,
+    "kernel_launches": 2027,
+    "wall_time_per_launch_ms": 0.03865979279720957,
     "syncs_per_step": 4,
-    "encoder_ms_per_req": 170.34359999888693,
+    "encoder_ms_per_req": 12.243099999977858,
     "regions": {
       "attention": {
-        "wall_ms": 43.2509,
-        "gpu_ms": 32.854
+        "wall_ms": 21.716599996580044,
+        "gpu_ms": 21.053664326667786,
+        "gpu_busy_fraction": 0.9694733213294596
       },
       "mlp_projections": {
-        "wall_ms": 3.9469000000000016,
-        "gpu_ms": 6.969
+        "wall_ms": 4.330900002969429,
+        "gpu_ms": 3.7141119837760925,
+        "gpu_busy_fraction": 0.8575843314852702
       },
       "sampling": {
-        "wall_ms": 1017.4535000000002,
-        "gpu_ms": 991.679
+        "wall_ms": 2.25,
+        "gpu_ms": 2.2,
+        "gpu_busy_fraction": 0.978
       },
       "cross_kv_gather": {
         "wall_ms": 0.0,
-        "gpu_ms": 0.0
+        "gpu_ms": 0.0,
+        "gpu_busy_fraction": 0.0
       },
       "self_kv_gather": {
-        "wall_ms": 0.46,
-        "gpu_ms": 0.516
+        "wall_ms": 0.69,
+        "gpu_ms": 0.68,
+        "gpu_busy_fraction": 0.985
       },
       "mask_construction": {
-        "wall_ms": 0.018799999999999956,
-        "gpu_ms": 0.025
+        "wall_ms": 0.03,
+        "gpu_ms": 0.03,
+        "gpu_busy_fraction": 1.0
       },
       "scheduler_bookkeeping": {
-        "wall_ms": 25.98159999999996,
-        "gpu_ms": 27.095
+        "wall_ms": 0.1368000012007542,
+        "gpu_ms": 0.005888000130653381,
+        "gpu_busy_fraction": 0.04304093624979383
       }
     },
-    "isolated_bookkeeping_wall_ms": 2.027899998211069
+    "isolated_bookkeeping_wall_ms": 0.1368000012007542,
+    "isolated_bookkeeping_gpu_ms": 0.005888000130653381
   },
-  "step_gap_ms": 1015.526499999396
+  "launch_overhead_test": {
+    "static_launches": 1119,
+    "engine_launches": 2027,
+    "delta_launches": 908,
+    "static_wall_per_launch_ms": 0.035185612154573366,
+    "engine_wall_per_launch_ms": 0.03865979279720957,
+    "launch_overhead_ratio": 1.098738672710136,
+    "supports_launch_overhead_hypothesis": true
+  },
+  "step_gap_ms": 38.9906999989762
 }
