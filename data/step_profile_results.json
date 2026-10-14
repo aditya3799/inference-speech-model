@@ -1,0 +1,98 @@
+{
+  "static_batching": {
+    "system": "static_batching",
+    "batch_size": 4,
+    "step_wall_time_ms": 66.47680000060063,
+    "gpu_kernel_time_ms": 135.136,
+    "gpu_busy_fraction": 2.0328294983931086,
+    "idle_gap_ms": 0.0,
+    "cuda_kernel_launches_per_step": 1144,
+    "cpu_gpu_syncs_per_step": 1,
+    "encoder_invocation": "batched_across_requests",
+    "encoder_total_ms": 47.75130000052741,
+    "encoder_ms_per_request": 11.937825000131852,
+    "labeled_regions_ms": {
+      "attention": 35.67030000000001,
+      "mlp_projections": 4.560700000000008,
+      "sampling": 1.0088999999999941,
+      "cross_kv_gather": 0.0,
+      "self_kv_gather": 0.0,
+      "mask_construction": 0.0,
+      "scheduler_bookkeeping": 0.0
+    }
+  },
+  "engine_flag_on": {
+    "system": "engine_flag_on",
+    "batch_size": 4,
+    "step_wall_time_ms": 109.46279999916442,
+    "gpu_kernel_time_ms": 216.205,
+    "gpu_busy_fraction": 1.9751458943280311,
+    "idle_gap_ms": 0.0,
+    "cuda_kernel_launches_per_step": 2056,
+    "cpu_gpu_syncs_per_step": 4,
+    "encoder_invocation": "sequential_batch_1_per_request",
+    "encoder_total_ms": 111.79719999927329,
+    "encoder_ms_per_request": 27.949299999818322,
+    "labeled_regions_ms": {
+      "attention": 37.21940000000002,
+      "mlp_projections": 7.010300000000018,
+      "sampling": 3.175800000000003,
+      "cross_kv_gather": 0.0,
+      "self_kv_gather": 1.4045,
+      "mask_construction": 0.06419999999999981,
+      "scheduler_bookkeeping": 35.2963
+    }
+  },
+  "step_gap_ms": 42.985999998563784,
+  "region_ranking": [
+    {
+      "region": "scheduler_bookkeeping",
+      "engine_ms": 35.2963,
+      "static_ms": 0.0,
+      "delta_ms": 35.2963,
+      "share_of_gap_pct": 82.11115247098891
+    },
+    {
+      "region": "mlp_projections",
+      "engine_ms": 7.010300000000018,
+      "static_ms": 4.560700000000008,
+      "delta_ms": 2.44960000000001,
+      "share_of_gap_pct": 5.698599544228014
+    },
+    {
+      "region": "sampling",
+      "engine_ms": 3.175800000000003,
+      "static_ms": 1.0088999999999941,
+      "delta_ms": 2.166900000000009,
+      "share_of_gap_pct": 5.040943563188963
+    },
+    {
+      "region": "attention",
+      "engine_ms": 37.21940000000002,
+      "static_ms": 35.67030000000001,
+      "delta_ms": 1.54910000000001,
+      "share_of_gap_pct": 3.6037314475684346
+    },
+    {
+      "region": "self_kv_gather",
+      "engine_ms": 1.4045,
+      "static_ms": 0.0,
+      "delta_ms": 1.4045,
+      "share_of_gap_pct": 3.267342855922687
+    },
+    {
+      "region": "mask_construction",
+      "engine_ms": 0.06419999999999981,
+      "static_ms": 0.0,
+      "delta_ms": 0.06419999999999981,
+      "share_of_gap_pct": 0.14935095147756206
+    },
+    {
+      "region": "cross_kv_gather",
+      "engine_ms": 0.0,
+      "static_ms": 0.0,
+      "delta_ms": 0.0,
+      "share_of_gap_pct": 0.0
+    }
+  ]
+}

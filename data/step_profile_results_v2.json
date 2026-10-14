@@ -1,0 +1,66 @@
+{
+  "static_batching": {
+    "step_wall_ms": 88.36169999995036,
+    "gpu_kernel_ms": 198.067,
+    "kernel_launches": 1144,
+    "syncs_per_step": 1,
+    "encoder_ms_per_req": 151.03314999942086,
+    "regions": {
+      "attention": {
+        "wall_ms": 40.39920000000001,
+        "gpu_ms": 31.717
+      },
+      "mlp_projections": {
+        "wall_ms": 5.962100000000006,
+        "gpu_ms": 7.309
+      },
+      "sampling": {
+        "wall_ms": 1.0706000000000058,
+        "gpu_ms": 1.086
+      },
+      "scheduler_bookkeeping": {
+        "wall_ms": 0.0,
+        "gpu_ms": 0.0
+      }
+    }
+  },
+  "engine_flag_on": {
+    "step_wall_ms": 1103.8881999993464,
+    "gpu_kernel_ms": 1243.611,
+    "kernel_launches": 2051,
+    "syncs_per_step": 4,
+    "encoder_ms_per_req": 170.34359999888693,
+    "regions": {
+      "attention": {
+        "wall_ms": 43.2509,
+        "gpu_ms": 32.854
+      },
+      "mlp_projections": {
+        "wall_ms": 3.9469000000000016,
+        "gpu_ms": 6.969
+      },
+      "sampling": {
+        "wall_ms": 1017.4535000000002,
+        "gpu_ms": 991.679
+      },
+      "cross_kv_gather": {
+        "wall_ms": 0.0,
+        "gpu_ms": 0.0
+      },
+      "self_kv_gather": {
+        "wall_ms": 0.46,
+        "gpu_ms": 0.516
+      },
+      "mask_construction": {
+        "wall_ms": 0.018799999999999956,
+        "gpu_ms": 0.025
+      },
+      "scheduler_bookkeeping": {
+        "wall_ms": 25.98159999999996,
+        "gpu_ms": 27.095
+      }
+    },
+    "isolated_bookkeeping_wall_ms": 2.027899998211069
+  },
+  "step_gap_ms": 1015.526499999396
+}

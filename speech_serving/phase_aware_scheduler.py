@@ -34,6 +34,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
 import enum
 import torch
+from torch.profiler import record_function
 import hashlib
 import numpy as np
 from dataclasses import dataclass, field
@@ -105,6 +106,7 @@ class DualCacheRequest:
 
     # Timing metrics
     submission_time: Optional[float] = None
+    arrival_wall_time: Optional[float] = None
     queue_wait_time: Optional[float] = None
     start_time: Optional[float] = None
     encode_done_time: Optional[float] = None
@@ -130,6 +132,9 @@ class PhaseAwareSpeechScheduler:
         eos_token_id: Optional[int] = None,
         max_cached_encoder_inputs: int = 100,
         cache_cross_kv: bool = False,
+        batch_encoder: bool = False,
+        no_sync_decode: bool = False,
+        avoid_redundant_cross_kv: bool = False,
     ):
         self.model = model
         self.dual_cache = dual_cache_manager
@@ -142,6 +147,9 @@ class PhaseAwareSpeechScheduler:
         self.eos_token_id = eos_token_id
         self.max_cached_encoder_inputs = max_cached_encoder_inputs
         self.cache_cross_kv = cache_cross_kv
+        self.batch_encoder = batch_encoder
+        self.no_sync_decode = no_sync_decode
+        self.avoid_redundant_cross_kv = avoid_redundant_cross_kv
 
         self.queue: List[DualCacheRequest] = []
         self.active_encode: List[DualCacheRequest] = []
@@ -184,6 +192,7 @@ class PhaseAwareSpeechScheduler:
         max_new_tokens: int = 50,
         arrival_time: float = 0.0,
         eos_token_id: Optional[int] = None,
+        arrival_wall_time: Optional[float] = None,
     ) -> Optional[int]:
         """
         Submit a new encoder-decoder speech request.
@@ -267,13 +276,15 @@ class PhaseAwareSpeechScheduler:
         if effective_eos is None and getattr(self.model, "vocab_size", 0) >= 50258:
             effective_eos = WHISPER_EOS_TOKEN_ID
 
+        now = time.perf_counter()
         req = DualCacheRequest(
             id=self._next_id,
             mel_features=mel_features.to(self.device),
             prompt_token_ids=prompt_token_ids.to(self.device),
             max_new_tokens=max_new_tokens,
             arrival_time=arrival_time,
-            submission_time=time.perf_counter(),
+            arrival_wall_time=arrival_wall_time if arrival_wall_time is not None else now,
+            submission_time=now,
             eos_token_id=effective_eos,
             full_input_hash=full_hash,
         )
@@ -357,6 +368,53 @@ class PhaseAwareSpeechScheduler:
         blocks for a miss; the shared block is only reused via ref-count bump
         on the hit path where we do NOT write).
         """
+        # Batch encoder fast-path (Part 5 controlled experiment, default OFF)
+        available_slots = self.max_batch_size - (len(self.active_encode) + len(self.active_decode))
+        if self.batch_encoder and available_slots > 1 and len(self.queue) > 1 and not self.retain_encoder_cache:
+            batch_reqs = []
+            enc_block_size = self.dual_cache.encoder_bm.block_size
+            total_needed = 0
+            while self.queue and len(batch_reqs) < available_slots:
+                cand = self.queue[0]
+                est_seq = (cand.mel_features.shape[-1] + 1) // 2
+                needed = (est_seq + enc_block_size - 1) // enc_block_size
+                if self.dual_cache.encoder_bm.num_free_blocks < total_needed + needed:
+                    break
+                r_pop = self.queue.pop(0)
+                r_pop.start_time = time.perf_counter()
+                ref_arr = r_pop.arrival_wall_time if r_pop.arrival_wall_time is not None else r_pop.submission_time
+                if ref_arr is not None:
+                    r_pop.queue_wait_time = r_pop.start_time - ref_arr
+                    self.queue_wait_times.append(r_pop.queue_wait_time)
+                r_pop.phase = RequestPhase.ENCODE_PHASE
+                batch_reqs.append(r_pop)
+                total_needed += needed
+
+            if len(batch_reqs) > 1:
+                b_mels = torch.stack([
+                    r.mel_features.squeeze(0) if r.mel_features.dim() == 3 else r.mel_features
+                    for r in batch_reqs
+                ], dim=0).to(self.device)
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                t_enc_start = time.perf_counter()
+                with record_function("encoder_forward"):
+                    with torch.no_grad():
+                        b_hidden, b_kv_list = self.model.encode(b_mels)
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                t_enc_end = time.perf_counter()
+                enc_time = t_enc_end - t_enc_start
+                self.encoder_calls += 1
+
+                for i, req in enumerate(batch_reqs):
+                    req_hidden = b_hidden[i:i+1]
+                    req_kv = [(b_kv_list[l][0][i:i+1], b_kv_list[l][1][i:i+1]) for l in range(len(b_kv_list))]
+                    self._setup_request_after_encode(req, req_hidden, req_kv, full_hash=None, enc_time=enc_time)
+                return
+            elif len(batch_reqs) == 1:
+                self.queue.insert(0, batch_reqs[0])
+
         while len(self.active_encode) + len(self.active_decode) < self.max_batch_size and self.queue:
             next_req = self.queue[0]
             mel_len = next_req.mel_features.shape[-1]
@@ -393,8 +451,9 @@ class PhaseAwareSpeechScheduler:
 
             req = self.queue.pop(0)
             req.start_time = time.perf_counter()
-            if req.submission_time is not None:
-                req.queue_wait_time = req.start_time - req.submission_time
+            ref_arrival = req.arrival_wall_time if req.arrival_wall_time is not None else req.submission_time
+            if ref_arrival is not None:
+                req.queue_wait_time = req.start_time - ref_arrival
                 self.queue_wait_times.append(req.queue_wait_time)
             req.phase = RequestPhase.ENCODE_PHASE
 
@@ -441,148 +500,146 @@ class PhaseAwareSpeechScheduler:
                     if torch.cuda.is_available():
                         torch.cuda.synchronize()
                     t_enc_start = time.perf_counter()
-                    with torch.no_grad():
-                        encoder_hidden, encoder_kv_list = self.model.encode(mel_in)
+                    with record_function("encoder_forward"):
+                        with torch.no_grad():
+                            encoder_hidden, encoder_kv_list = self.model.encode(mel_in)
                     if torch.cuda.is_available():
                         torch.cuda.synchronize()
                     t_enc_end = time.perf_counter()
                     enc_time = t_enc_end - t_enc_start
                     self.encoder_calls += 1
 
-                    enc_seq_len = encoder_hidden.shape[1]
-                    req.encoder_seq_len = enc_seq_len
-
-                    # Allocate encoder blocks (all fresh / unshared on a miss)
-                    real_needed = (enc_seq_len + enc_block_size - 1) // enc_block_size
-                    enc_block_table = []
-                    for _ in range(real_needed):
-                        blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
-                        enc_block_table.append(blk_id)
-                    req.encoder_block_table = enc_block_table
-
-                    # Write encoder KV into fresh blocks ONLY (ref_count == 1)
-                    num_enc_layers = len(encoder_kv_list)
-                    for l in range(num_enc_layers):
-                        k = encoder_kv_list[l][0][0]  # [num_heads, enc_seq_len, head_dim]
-                        v = encoder_kv_list[l][1][0]
-                        for blk_idx_in_req, blk_id in enumerate(enc_block_table):
-                            # Safety: never write into a shared block
-                            assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
-                                f"Attempted to write into shared block {blk_id} "
-                                f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
-                            )
-                            start_t = blk_idx_in_req * enc_block_size
-                            end_t = min(start_t + enc_block_size, enc_seq_len)
-                            tok_count = end_t - start_t
-                            k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
-                            v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
-                            self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
-
-                    # Gather enc KV for this request (done once; reused every decode step)
-                    enc_kv_layers = []
-                    for l in range(num_enc_layers):
-                        gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
-                        gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
-                        flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                        flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                        ck = flat_k.permute(1, 0, 2).unsqueeze(0)   # [1, num_heads, enc_seq_len, head_dim]
-                        cv = flat_v.permute(1, 0, 2).unsqueeze(0)
-                        enc_kv_layers.append((ck, cv))
-
-                    req.cached_encoder_kv = enc_kv_layers
-
-                    # If retain_encoder_cache is True, store in bounded full-input cache
-                    if self.retain_encoder_cache:
-                        for blk_id in enc_block_table:
-                            self.dual_cache.encoder_bm.ref_counts[blk_id] += 1
-                        held_by_cache = True
-
-                        while len(self._full_input_enc_cache) >= self.max_cached_encoder_inputs:
-                            oldest_hash = min(
-                                self._full_input_enc_cache.keys(),
-                                key=lambda h: self._full_input_enc_cache[h]["last_access_time"]
-                            )
-                            evicted_entry = self._full_input_enc_cache.pop(oldest_hash)
-                            if evicted_entry.get("held_by_cache", False):
-                                self.dual_cache.encoder_bm.release_blocks(evicted_entry["block_table"])
-
-                        self._full_input_enc_cache[full_hash] = {
-                            "block_table": list(enc_block_table),
-                            "enc_seq_len": enc_seq_len,
-                            "cached_enc_kv": enc_kv_layers,
-                            "last_access_time": time.perf_counter(),
-                            "held_by_cache": held_by_cache,
-                            "encode_time": enc_time,
-                        }
-
-                    if self.verbose:
-                        logger.info(
-                            f"[ENCODE MISS] req {req.id}: encoder ran in "
-                            f"{t_enc_end - t_enc_start:.3f}s, "
-                            f"enc_seq_len={enc_seq_len}, blocks={real_needed}"
-                        )
-
-                # -------------------------------------------------------
-                # Common: decoder prefill (hit and miss paths both continue here)
-                # -------------------------------------------------------
-                req.encode_done_time = time.perf_counter()
-                req.phase = RequestPhase.DECODE_PHASE
-
-                enc_kv_layers = req.cached_encoder_kv
-                enc_seq_len = req.encoder_seq_len
-
-                # Allocate decoder prompt blocks
-                prompt_len = req.prompt_token_ids.shape[1]
-                req.decoder_seq_len = prompt_len
-                needed_dec_blocks = (prompt_len + self.dual_cache.decoder_bm.block_size - 1) // self.dual_cache.decoder_bm.block_size
-                for _ in range(needed_dec_blocks):
-                    req.decoder_block_table.append(self.dual_cache.allocate_decoder_block())
-
-                # Decoder prefill pass
-                with torch.no_grad():
-                    dec_out = self.model.decode_step(
-                        input_ids=req.prompt_token_ids,
-                        encoder_past_kv_list=enc_kv_layers,
-                        use_cache=True
-                    )
-
-                # Store decoder prefill KV into working cache (contiguous, zero-permute)
-                req.cached_decoder_kv = [
-                    (dec_out.past_key_values.layers[l].keys.contiguous(),
-                     dec_out.past_key_values.layers[l].values.contiguous())
-                    for l in range(self.dual_cache.decoder_bm.num_layers)
-                ]
-
-                # Store decoder prefill KV into decoder block pool
-                for l in range(self.dual_cache.decoder_bm.num_layers):
-                    dk = dec_out.past_key_values.layers[l].keys
-                    dv = dec_out.past_key_values.layers[l].values
-                    for blk_idx_in_req, blk_id in enumerate(req.decoder_block_table):
-                        start_t = blk_idx_in_req * self.dual_cache.decoder_bm.block_size
-                        end_t = min(start_t + self.dual_cache.decoder_bm.block_size, prompt_len)
-                        tok_count = end_t - start_t
-                        dk_slice = dk[0, :, start_t:end_t, :].permute(1, 0, 2)
-                        dv_slice = dv[0, :, start_t:end_t, :].permute(1, 0, 2)
-                        self.dual_cache.decoder_bm.key_pool[l][blk_id, :tok_count] = dk_slice
-                        self.dual_cache.decoder_bm.value_pool[l][blk_id, :tok_count] = dv_slice
-
-                next_tok = torch.argmax(dec_out.logits[:, -1, :], dim=-1).item()
-                req.last_token_id = next_tok
-                req.generated_tokens.append(next_tok)
-                req.generated_count += 1
-                req.first_token_time = time.perf_counter()
-
-                is_eos = (req.eos_token_id is not None and next_tok == req.eos_token_id)
-                if is_eos or req.generated_count >= req.max_new_tokens:
-                    self._complete_request(req, status=RequestPhase.COMPLETED)
-                else:
-                    self.active_decode.append(req)
-                    self._cached_batch_key = None  # Invalidate batch-level encoder cache on new admission
-                    self._cached_enc_mask = None
+                    self._setup_request_after_encode(req, encoder_hidden, encoder_kv_list, full_hash=full_hash, enc_time=enc_time)
 
             except Exception as e:
                 logger.error(f"Error in ENCODE_PHASE for req {req.id}: {e}", exc_info=True)
                 self._complete_request(req, status=RequestPhase.FAILED)
+
+    def _setup_request_after_encode(
+        self,
+        req: DualCacheRequest,
+        encoder_hidden: torch.Tensor,
+        encoder_kv_list: List[Tuple[torch.Tensor, torch.Tensor]],
+        full_hash: Optional[str] = None,
+        enc_time: float = 0.0,
+    ):
+        enc_block_size = self.dual_cache.encoder_bm.block_size
+        enc_seq_len = encoder_hidden.shape[1]
+        req.encoder_seq_len = enc_seq_len
+
+        # Allocate encoder blocks
+        real_needed = (enc_seq_len + enc_block_size - 1) // enc_block_size
+        enc_block_table = []
+        with record_function("scheduler_bookkeeping"):
+            for _ in range(real_needed):
+                blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
+                enc_block_table.append(blk_id)
+            req.encoder_block_table = enc_block_table
+
+            # Write encoder KV into fresh blocks ONLY
+            num_enc_layers = len(encoder_kv_list)
+            for l in range(num_enc_layers):
+                k = encoder_kv_list[l][0][0]
+                v = encoder_kv_list[l][1][0]
+                for blk_idx_in_req, blk_id in enumerate(enc_block_table):
+                    assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
+                        f"Attempted to write into shared block {blk_id} "
+                        f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
+                    )
+                    start_t = blk_idx_in_req * enc_block_size
+                    end_t = min(start_t + enc_block_size, enc_seq_len)
+                    tok_count = end_t - start_t
+                    k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
+                    v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
+                    self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
+
+        # Gather enc KV for this request (done once at handoff)
+        with record_function("cross_kv_gather"):
+            enc_kv_layers = []
+            for l in range(num_enc_layers):
+                gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
+                gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
+                flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                ck = flat_k.permute(1, 0, 2).unsqueeze(0)
+                cv = flat_v.permute(1, 0, 2).unsqueeze(0)
+                enc_kv_layers.append((ck, cv))
+            req.cached_encoder_kv = enc_kv_layers
+
+        if self.retain_encoder_cache and full_hash:
+            for blk_id in enc_block_table:
+                self.dual_cache.encoder_bm.ref_counts[blk_id] += 1
+            held_by_cache = True
+            while len(self._full_input_enc_cache) >= self.max_cached_encoder_inputs:
+                oldest_hash = min(
+                    self._full_input_enc_cache.keys(),
+                    key=lambda h: self._full_input_enc_cache[h]["last_access_time"]
+                )
+                evicted_entry = self._full_input_enc_cache.pop(oldest_hash)
+                if evicted_entry.get("held_by_cache", False):
+                    self.dual_cache.encoder_bm.release_blocks(evicted_entry["block_table"])
+
+            self._full_input_enc_cache[full_hash] = {
+                "block_table": list(enc_block_table),
+                "enc_seq_len": enc_seq_len,
+                "cached_enc_kv": enc_kv_layers,
+                "last_access_time": time.perf_counter(),
+                "held_by_cache": held_by_cache,
+                "encode_time": enc_time,
+            }
+
+        # Decoder prefill
+        req.encode_done_time = time.perf_counter()
+        req.phase = RequestPhase.DECODE_PHASE
+
+        prompt_len = req.prompt_token_ids.shape[1]
+        req.decoder_seq_len = prompt_len
+        needed_dec_blocks = (prompt_len + self.dual_cache.decoder_bm.block_size - 1) // self.dual_cache.decoder_bm.block_size
+        with record_function("scheduler_bookkeeping"):
+            for _ in range(needed_dec_blocks):
+                req.decoder_block_table.append(self.dual_cache.allocate_decoder_block())
+
+        with torch.no_grad():
+            dec_out = self.model.decode_step(
+                input_ids=req.prompt_token_ids,
+                encoder_past_kv_list=enc_kv_layers,
+                use_cache=True
+            )
+
+        with record_function("scheduler_bookkeeping"):
+            req.cached_decoder_kv = [
+                (dec_out.past_key_values.layers[l].keys.contiguous(),
+                 dec_out.past_key_values.layers[l].values.contiguous())
+                for l in range(self.dual_cache.decoder_bm.num_layers)
+            ]
+            for l in range(self.dual_cache.decoder_bm.num_layers):
+                dk = dec_out.past_key_values.layers[l].keys
+                dv = dec_out.past_key_values.layers[l].values
+                for blk_idx_in_req, blk_id in enumerate(req.decoder_block_table):
+                    start_t = blk_idx_in_req * self.dual_cache.decoder_bm.block_size
+                    end_t = min(start_t + self.dual_cache.decoder_bm.block_size, prompt_len)
+                    tok_count = end_t - start_t
+                    dk_slice = dk[0, :, start_t:end_t, :].permute(1, 0, 2)
+                    dv_slice = dv[0, :, start_t:end_t, :].permute(1, 0, 2)
+                    self.dual_cache.decoder_bm.key_pool[l][blk_id, :tok_count] = dk_slice
+                    self.dual_cache.decoder_bm.value_pool[l][blk_id, :tok_count] = dv_slice
+
+        with record_function("sampling"):
+            next_tok = torch.argmax(dec_out.logits[:, -1, :], dim=-1).item()
+        req.last_token_id = next_tok
+        req.generated_tokens.append(next_tok)
+        req.generated_count += 1
+        req.first_token_time = time.perf_counter()
+
+        is_eos = (req.eos_token_id is not None and next_tok == req.eos_token_id)
+        if is_eos or req.generated_count >= req.max_new_tokens:
+            self._complete_request(req, status=RequestPhase.COMPLETED)
+        else:
+            self.active_decode.append(req)
+            if self.avoid_redundant_cross_kv:
+                req.cached_encoder_kv = None
+            self._cached_batch_key = None
+            self._cached_enc_mask = None
 
 
     def _process_decode_phase(self):
@@ -607,46 +664,48 @@ class PhaseAwareSpeechScheduler:
 
         dec_cache = DynamicCache()
         self_attn_mask = None
-        if batch_size == 1:
-            req = self.active_decode[0]
-            for l in range(num_dec_layers):
-                layer = DynamicLayer()
-                layer.keys = req.cached_decoder_kv[l][0]
-                layer.values = req.cached_decoder_kv[l][1]
-                layer.is_initialized = True
-                dec_cache.layers.append(layer)
-        else:
-            max_dec_len = max(req.decoder_seq_len for req in self.active_decode)
-            min_dec_len = min(req.decoder_seq_len for req in self.active_decode)
-            if min_dec_len == max_dec_len:
+        with record_function("self_kv_gather"):
+            if batch_size == 1:
+                req = self.active_decode[0]
                 for l in range(num_dec_layers):
                     layer = DynamicLayer()
-                    layer.keys = torch.cat([req.cached_decoder_kv[l][0] for req in self.active_decode], dim=0)
-                    layer.values = torch.cat([req.cached_decoder_kv[l][1] for req in self.active_decode], dim=0)
+                    layer.keys = req.cached_decoder_kv[l][0]
+                    layer.values = req.cached_decoder_kv[l][1]
                     layer.is_initialized = True
                     dec_cache.layers.append(layer)
             else:
-                for l in range(num_dec_layers):
-                    batched_k = torch.zeros(
-                        (batch_size, num_kv_heads, max_dec_len, head_dim),
-                        device=self.device, dtype=self.dual_cache.decoder_bm.dtype
-                    )
-                    batched_v = torch.zeros(
-                        (batch_size, num_kv_heads, max_dec_len, head_dim),
-                        device=self.device, dtype=self.dual_cache.decoder_bm.dtype
-                    )
-                    for i, req in enumerate(self.active_decode):
-                        ck = req.cached_decoder_kv[l][0]
-                        cv = req.cached_decoder_kv[l][1]
-                        batched_k[i, :, :req.decoder_seq_len, :] = ck[0]
-                        batched_v[i, :, :req.decoder_seq_len, :] = cv[0]
-                    layer = DynamicLayer()
-                    layer.keys = batched_k
-                    layer.values = batched_v
-                    layer.is_initialized = True
-                    dec_cache.layers.append(layer)
+                max_dec_len = max(req.decoder_seq_len for req in self.active_decode)
+                min_dec_len = min(req.decoder_seq_len for req in self.active_decode)
+                if min_dec_len == max_dec_len:
+                    for l in range(num_dec_layers):
+                        layer = DynamicLayer()
+                        layer.keys = torch.cat([req.cached_decoder_kv[l][0] for req in self.active_decode], dim=0)
+                        layer.values = torch.cat([req.cached_decoder_kv[l][1] for req in self.active_decode], dim=0)
+                        layer.is_initialized = True
+                        dec_cache.layers.append(layer)
+                else:
+                    for l in range(num_dec_layers):
+                        batched_k = torch.zeros(
+                            (batch_size, num_kv_heads, max_dec_len, head_dim),
+                            device=self.device, dtype=self.dual_cache.decoder_bm.dtype
+                        )
+                        batched_v = torch.zeros(
+                            (batch_size, num_kv_heads, max_dec_len, head_dim),
+                            device=self.device, dtype=self.dual_cache.decoder_bm.dtype
+                        )
+                        for i, req in enumerate(self.active_decode):
+                            ck = req.cached_decoder_kv[l][0]
+                            cv = req.cached_decoder_kv[l][1]
+                            batched_k[i, :, :req.decoder_seq_len, :] = ck[0]
+                            batched_v[i, :, :req.decoder_seq_len, :] = cv[0]
+                        layer = DynamicLayer()
+                        layer.keys = batched_k
+                        layer.values = batched_v
+                        layer.is_initialized = True
+                        dec_cache.layers.append(layer)
 
-                # Decoder self-attention padding mask (key len = max_dec_len + 1 past + current)
+        with record_function("mask_construction"):
+            if batch_size > 1 and min_dec_len < max_dec_len:
                 self_attn_mask = torch.ones(
                     (batch_size, max_dec_len + 1),
                     device=self.device,
@@ -701,7 +760,26 @@ class PhaseAwareSpeechScheduler:
         else:
             # Optimized path (cache_cross_kv=True): cross-KV gathered once at handoff, reused across decode steps
             if batch_size == 1:
-                enc_kv_layers = self.active_decode[0].cached_encoder_kv
+                if self.avoid_redundant_cross_kv:
+                    batch_key = tuple(req.id for req in self.active_decode)
+                    if self._cached_batch_key == batch_key and self._cached_batched_enc_kv is not None:
+                        enc_kv_layers = self._cached_batched_enc_kv
+                    else:
+                        req = self.active_decode[0]
+                        num_enc_layers = self.model.num_encoder_layers
+                        enc_num_heads = self.dual_cache.encoder_bm.num_heads
+                        enc_head_dim = self.dual_cache.encoder_bm.head_dim
+                        enc_kv_layers = []
+                        for l in range(num_enc_layers):
+                            k_blks = self.dual_cache.encoder_bm.key_pool[l][req.encoder_block_table]
+                            v_blks = self.dual_cache.encoder_bm.value_pool[l][req.encoder_block_table]
+                            ck = k_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                            cv = v_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                            enc_kv_layers.append((ck, cv))
+                        self._cached_batch_key = batch_key
+                        self._cached_batched_enc_kv = enc_kv_layers
+                else:
+                    enc_kv_layers = self.active_decode[0].cached_encoder_kv
             else:
                 batch_key = tuple(req.id for req in self.active_decode)
                 if self._cached_batch_key == batch_key and self._cached_batched_enc_kv is not None:
@@ -715,26 +793,51 @@ class PhaseAwareSpeechScheduler:
                     enc_head_dim = self.dual_cache.encoder_bm.head_dim
                     enc_dtype = self.dual_cache.encoder_bm.dtype
 
-                    enc_kv_layers = []
-                    for l in range(num_enc_layers):
-                        if min_enc_len == max_enc_len:
-                            b_k = torch.cat([req.cached_encoder_kv[l][0] for req in self.active_decode], dim=0)
-                            b_v = torch.cat([req.cached_encoder_kv[l][1] for req in self.active_decode], dim=0)
-                        else:
-                            b_k = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
-                            b_v = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
-                            for i, req in enumerate(self.active_decode):
-                                ck, cv = req.cached_encoder_kv[l]
-                                b_k[i, :, :req.encoder_seq_len, :] = ck[0]
-                                b_v[i, :, :req.encoder_seq_len, :] = cv[0]
-                        enc_kv_layers.append((b_k, b_v))
+                    with record_function("cross_kv_gather"):
+                        enc_kv_layers = []
+                        for l in range(num_enc_layers):
+                            if self.avoid_redundant_cross_kv:
+                                if min_enc_len == max_enc_len:
+                                    b_k = torch.cat([
+                                        self.dual_cache.encoder_bm.key_pool[l][req.encoder_block_table].view(
+                                            -1, enc_num_heads, enc_head_dim
+                                        )[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                                        for req in self.active_decode
+                                    ], dim=0)
+                                    b_v = torch.cat([
+                                        self.dual_cache.encoder_bm.value_pool[l][req.encoder_block_table].view(
+                                            -1, enc_num_heads, enc_head_dim
+                                        )[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)
+                                        for req in self.active_decode
+                                    ], dim=0)
+                                else:
+                                    b_k = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                                    b_v = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                                    for i, req in enumerate(self.active_decode):
+                                        k_blks = self.dual_cache.encoder_bm.key_pool[l][req.encoder_block_table]
+                                        v_blks = self.dual_cache.encoder_bm.value_pool[l][req.encoder_block_table]
+                                        b_k[i, :, :req.encoder_seq_len, :] = k_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)[0]
+                                        b_v[i, :, :req.encoder_seq_len, :] = v_blks.view(-1, enc_num_heads, enc_head_dim)[:req.encoder_seq_len].permute(1, 0, 2).unsqueeze(0)[0]
+                            else:
+                                if min_enc_len == max_enc_len:
+                                    b_k = torch.cat([req.cached_encoder_kv[l][0] for req in self.active_decode], dim=0)
+                                    b_v = torch.cat([req.cached_encoder_kv[l][1] for req in self.active_decode], dim=0)
+                                else:
+                                    b_k = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                                    b_v = torch.zeros((batch_size, enc_num_heads, max_enc_len, enc_head_dim), device=self.device, dtype=enc_dtype)
+                                    for i, req in enumerate(self.active_decode):
+                                        ck, cv = req.cached_encoder_kv[l]
+                                        b_k[i, :, :req.encoder_seq_len, :] = ck[0]
+                                        b_v[i, :, :req.encoder_seq_len, :] = cv[0]
+                            enc_kv_layers.append((b_k, b_v))
 
-                    if min_enc_len < max_enc_len:
-                        enc_mask = torch.zeros((batch_size, 1, 1, max_enc_len), device=self.device, dtype=torch.bool)
-                        for i, req in enumerate(self.active_decode):
-                            enc_mask[i, 0, 0, :req.encoder_seq_len] = True
-                    else:
-                        enc_mask = None
+                    with record_function("mask_construction"):
+                        if min_enc_len < max_enc_len:
+                            enc_mask = torch.zeros((batch_size, 1, 1, max_enc_len), device=self.device, dtype=torch.bool)
+                            for i, req in enumerate(self.active_decode):
+                                enc_mask[i, 0, 0, :req.encoder_seq_len] = True
+                        else:
+                            enc_mask = None
 
                     self._cached_batch_key = batch_key
                     self._cached_batched_enc_kv = enc_kv_layers
@@ -757,28 +860,41 @@ class PhaseAwareSpeechScheduler:
                 use_cache=True,
             )
 
+        # Sampling optimization: batched argmax and sync if no_sync_decode is True
+        batch_next_tokens = None
+        if self.no_sync_decode:
+            with record_function("sampling"):
+                batch_next_tokens = torch.argmax(dec_out.logits[:, -1, :], dim=-1).tolist()
+
         # 6. Scatter new decoder token KV back to physical block table & update request working cache
         still_active = []
         for i, req in enumerate(self.active_decode):
             try:
-                blk_id = req.decoder_block_table[req.decoder_seq_len // self.dual_cache.decoder_bm.block_size]
-                offset = req.decoder_seq_len % self.dual_cache.decoder_bm.block_size
-                for l in range(num_dec_layers):
-                    new_k = dec_out.past_key_values.layers[l].keys[i, :, -1, :]
-                    new_v = dec_out.past_key_values.layers[l].values[i, :, -1, :]
-                    self.dual_cache.decoder_bm.key_pool[l][blk_id, offset] = new_k
-                    self.dual_cache.decoder_bm.value_pool[l][blk_id, offset] = new_v
+                with record_function("scheduler_bookkeeping"):
+                    blk_id = req.decoder_block_table[req.decoder_seq_len // self.dual_cache.decoder_bm.block_size]
+                    offset = req.decoder_seq_len % self.dual_cache.decoder_bm.block_size
+                    for l in range(num_dec_layers):
+                        new_k = dec_out.past_key_values.layers[l].keys[i, :, -1, :]
+                        new_v = dec_out.past_key_values.layers[l].values[i, :, -1, :]
+                        self.dual_cache.decoder_bm.key_pool[l][blk_id, offset] = new_k
+                        self.dual_cache.decoder_bm.value_pool[l][blk_id, offset] = new_v
 
-                    # Incremental O(1) append to request working buffer [1, num_kv_heads, 1, head_dim]
-                    new_k_slice = new_k.unsqueeze(0).unsqueeze(2)
-                    new_v_slice = new_v.unsqueeze(0).unsqueeze(2)
-                    req.cached_decoder_kv[l] = (
-                        torch.cat([req.cached_decoder_kv[l][0], new_k_slice], dim=2),
-                        torch.cat([req.cached_decoder_kv[l][1], new_v_slice], dim=2)
-                    )
+                        # Incremental O(1) append to request working buffer [1, num_kv_heads, 1, head_dim]
+                        new_k_slice = new_k.unsqueeze(0).unsqueeze(2)
+                        new_v_slice = new_v.unsqueeze(0).unsqueeze(2)
+                        req.cached_decoder_kv[l] = (
+                            torch.cat([req.cached_decoder_kv[l][0], new_k_slice], dim=2),
+                            torch.cat([req.cached_decoder_kv[l][1], new_v_slice], dim=2)
+                        )
 
-                req.decoder_seq_len += 1
-                next_tok = torch.argmax(dec_out.logits[i, -1, :], dim=-1).item()
+                    req.decoder_seq_len += 1
+
+                with record_function("sampling"):
+                    if self.no_sync_decode and batch_next_tokens is not None:
+                        next_tok = batch_next_tokens[i]
+                    else:
+                        next_tok = torch.argmax(dec_out.logits[i, -1, :], dim=-1).item()
+
                 req.last_token_id = next_tok
                 req.generated_tokens.append(next_tok)
                 req.generated_count += 1
@@ -845,6 +961,11 @@ class PhaseAwareSpeechScheduler:
                     cached_cross_bytes += (
                         req.encoder_seq_len * 2 * enc_bm.num_layers * enc_bm.num_heads * enc_bm.head_dim * dt_bytes
                     )
+
+        if not hasattr(self, "peak_pool_blocks_used_bytes"):
+            self.peak_pool_blocks_used_bytes = 0
+        if used_pool_bytes > self.peak_pool_blocks_used_bytes:
+            self.peak_pool_blocks_used_bytes = used_pool_bytes
 
         now_used = used_pool_bytes + cached_cross_bytes
         if now_used > self.peak_actually_used_bytes:

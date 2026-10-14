@@ -122,6 +122,10 @@ Evaluated across 100 stratified LibriSpeech `test-clean` utterances with 3 repea
   - However, max in-flight requests across all profiles is strictly 4.
   - This cap comes directly from the scheduler batch limit configured as `max_batch_size: int = 4` in `scripts/evaluate_real_speech.py` (line 277, line 306, line 480) and enforced in `speech_serving/phase_aware_scheduler.py` line 357 (`while len(self.active_encode) + len(self.active_decode) < self.max_batch_size and self.queue:`).
   - Because active concurrency was capped at 4 by the scheduler, memory utilization never reached the 75% threshold, and the high-water-mark memory guard never engaged.
+  - *Queue-Wait Metric Definition & Fix (Part 1 Audit):*
+    - **Original Computation (file & lines):** In `speech_serving/phase_aware_scheduler.py` (lines 395–398), `req.queue_wait_time` was computed as `req.start_time - req.submission_time`, where `req.submission_time` was stamped during `scheduler.submit()`.
+    - **Discrepancy Explanation:** In burst traffic, TTFT p50 was ~13.9s but `queue_wait` p50 was reported as ~1.6s–2.1s. In `scripts/evaluate_real_speech.py`, submissions from `requests_sorted` were throttled by `len(scheduler.queue) < max_batch_size * 2`. In burst traffic, 92 of 100 requests waited in the simulation generator list *before* `scheduler.submit()` was called. Thus, `req.start_time - req.submission_time` measured only the brief residency inside `scheduler.queue` (bounded buffer wait), omitting the actual client arrival-to-submission wait.
+    - **Corrected Definition:** True admission wait is defined as elapsed time from wall-clock request arrival to first admission (`req.start_time - req.arrival_wall_time`, where `arrival_wall_time = t_bench_start + arrival_time`). `DualCacheRequest` now tracks `arrival_wall_time` explicitly, aligning `queue_wait_time` with admission wait ($t_{\text{admit}} - t_{\text{arrival}}$).
 
 ### Task 5: Paging vs. Batching Ablation Benchmark & Direct Paged Attention
 Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_decomposition.py`:

@@ -1,0 +1,118 @@
+{
+  "tail_decomposition": {
+    "static_batching": {
+      "p95_threshold_s": 0.7321364879777149,
+      "tail_requests_latency_gte_p95": {
+        "count": 5,
+        "mean_total_latency_s": 0.8268566088384659,
+        "mean_admission_wait_s": 0.32522572883845485,
+        "admission_wait_share_pct": 39.332784591915946,
+        "mean_ttft_s": 0.03971078000001853,
+        "ttft_share_pct": 4.802619895099175,
+        "mean_decode_time_s": 0.46192009999999756,
+        "decode_time_share_pct": 55.86459551298548,
+        "shares_sum_pct": 100.0000000000006
+      },
+      "all_requests_mean": {
+        "count": 100,
+        "mean_total_latency_s": 0.4455174123651125,
+        "mean_admission_wait_s": 0.12934097836510358,
+        "admission_wait_share_pct": 29.03163260858264,
+        "mean_ttft_s": 0.035818995000003045,
+        "ttft_share_pct": 8.039864213129452,
+        "mean_decode_time_s": 0.28035743900000737,
+        "decode_time_share_pct": 62.92850317828824,
+        "shares_sum_pct": 100.00000000000033
+      }
+    },
+    "engine_baseline": {
+      "p95_threshold_s": 3.4596187443199256,
+      "tail_requests_latency_gte_p95": {
+        "count": 5,
+        "mean_total_latency_s": 3.7001606136346483,
+        "mean_admission_wait_s": 1.8663540136347059,
+        "admission_wait_share_pct": 50.43981082219553,
+        "mean_ttft_s": 0.0987912199999755,
+        "ttft_share_pct": 2.6699170743005505,
+        "mean_decode_time_s": 1.7350153799999817,
+        "decode_time_share_pct": 46.890272103504316,
+        "shares_sum_pct": 100.0000000000004
+      },
+      "all_requests_mean": {
+        "count": 100,
+        "mean_total_latency_s": 1.6007359443650853,
+        "mean_admission_wait_s": 0.8241047963650844,
+        "admission_wait_share_pct": 51.482869443027134,
+        "mean_ttft_s": 0.07781878899999811,
+        "ttft_share_pct": 4.861438219959764,
+        "mean_decode_time_s": 0.6988123590000044,
+        "decode_time_share_pct": 43.6556923370132,
+        "shares_sum_pct": 100.0000000000001
+      }
+    }
+  },
+  "service_capacity": {
+    "static_batching": {
+      "burst_wall_time_s_mean": 11.15522199999998,
+      "service_capacity_req_per_sec_mean": 8.980171862996189,
+      "service_capacity_req_per_sec_std": 0.3726075722233596,
+      "arrival_rate_req_per_sec": 4.0,
+      "capacity_margin_req_per_sec": 4.980171862996189,
+      "queue_stable_under_4_req_sec": true
+    },
+    "engine_baseline": {
+      "burst_wall_time_s_mean": 19.63543660000001,
+      "service_capacity_req_per_sec_mean": 5.101121498662504,
+      "service_capacity_req_per_sec_std": 0.2061609736842727,
+      "arrival_rate_req_per_sec": 4.0,
+      "capacity_margin_req_per_sec": 1.1011214986625042,
+      "queue_stable_under_4_req_sec": true
+    },
+    "engine_no_sync": {
+      "burst_wall_time_s_mean": 19.493812566666673,
+      "service_capacity_req_per_sec_mean": 5.132478205960847,
+      "service_capacity_req_per_sec_std": 0.1174182825425187,
+      "arrival_rate_req_per_sec": 4.0,
+      "capacity_margin_req_per_sec": 1.1324782059608474,
+      "queue_stable_under_4_req_sec": true
+    },
+    "engine_batch_encoder": {
+      "burst_wall_time_s_mean": 18.489705533333336,
+      "service_capacity_req_per_sec_mean": 5.41563765195838,
+      "service_capacity_req_per_sec_std": 0.19549075595080337,
+      "arrival_rate_req_per_sec": 4.0,
+      "capacity_margin_req_per_sec": 1.41563765195838,
+      "queue_stable_under_4_req_sec": true
+    },
+    "engine_avoid_redundant": {
+      "burst_wall_time_s_mean": 18.860716766666656,
+      "service_capacity_req_per_sec_mean": 5.303696516904523,
+      "service_capacity_req_per_sec_std": 0.0939011179544632,
+      "arrival_rate_req_per_sec": 4.0,
+      "capacity_margin_req_per_sec": 1.3036965169045232,
+      "queue_stable_under_4_req_sec": true
+    }
+  },
+  "encoder_analysis": {
+    "static_batching": {
+      "encoder_ms_per_request": 151.03314999942086,
+      "mean_generated_tokens": 28.54,
+      "mean_execution_time_ms": 316.17643400001043,
+      "encoder_share_of_execution_pct": 47.76862971369203
+    },
+    "engine_baseline": {
+      "encoder_ms_per_request": 170.34359999888693,
+      "mean_generated_tokens": 28.56,
+      "mean_execution_time_ms": 776.6311480000024,
+      "encoder_share_of_execution_pct": 21.933655434443942
+    }
+  },
+  "queue_wait_documentation": {
+    "file": "speech_serving/phase_aware_scheduler.py",
+    "lines": "381-386 (batch_encoder path) and 450-456 (sequential encode path)",
+    "original_metric": "queue_wait_time = req.start_time - req.submission_time",
+    "what_it_measured_originally": "Internal scheduler queue buffer residency time (the time spent in scheduler.queue after submit() was invoked). In burst traffic, evaluate_real_speech.py throttled submissions to len(scheduler.queue) < max_batch_size * 2 = 8, so 92 requests waited in requests_sorted before submit() was called. Thus, queue_wait p50 reported ~2.1 s, whereas true arrival wait was ~13.9 s.",
+    "fixed_metric": "admission_wait_time = req.start_time - req.arrival_wall_time",
+    "what_it_measures_now": "True arrival-to-admission wait time (from request arrival wall-clock time t_bench_start + arrival_time until first admission into the encode phase start_time). Identical to admission wait."
+  }
+}

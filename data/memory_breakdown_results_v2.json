@@ -1,0 +1,76 @@
+{
+  "static_batching": {
+    "system": "static_batching",
+    "model_weights_mb": 138.51171875,
+    "pool_blocks_used_mb": 0.0,
+    "pool_allocated_mb": 0.0,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 0.0,
+      "batched_cached_tensor_mb": 70.3125,
+      "total_contiguous_cross_kv_mb": 70.3125
+    },
+    "activations_mb": 98.76611328125,
+    "peak_allocated_mb": 307.59033203125,
+    "peak_reserved_mb": 328.0
+  },
+  "engine_default": {
+    "system": "engine_default_pools",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 71.25,
+    "pool_allocated_mb": 1344.0,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 70.3125,
+      "batched_cached_tensor_mb": 70.3125,
+      "total_contiguous_cross_kv_mb": 140.625
+    },
+    "activations_mb": 83.29443359375,
+    "peak_allocated_mb": 1715.46630859375,
+    "peak_reserved_mb": 1754.0
+  },
+  "engine_right_sized": {
+    "system": "engine_right_sized_pools",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 54.0,
+    "pool_allocated_mb": 127.40625,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 52.734375,
+      "batched_cached_tensor_mb": 52.734375,
+      "total_contiguous_cross_kv_mb": 105.46875
+    },
+    "activations_mb": 65.62841796875,
+    "peak_allocated_mb": 446.05029296875,
+    "peak_reserved_mb": 468.0
+  },
+  "engine_avoid_redundant_cross_kv": {
+    "system": "engine_avoid_redundant_cross_kv",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 54.0,
+    "pool_allocated_mb": 127.40625,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 0.0,
+      "batched_cached_tensor_mb": 52.734375,
+      "total_contiguous_cross_kv_mb": 52.734375
+    },
+    "activations_mb": 61.67529296875,
+    "peak_allocated_mb": 389.36279296875,
+    "peak_reserved_mb": 428.0
+  },
+  "parity_avoid_redundant_cross_kv": {
+    "exact_matches": 20,
+    "total_samples": 20,
+    "exact_utterance_match_pct": 100.0,
+    "token_match_rate_pct": 100.0
+  },
+  "offset_explanation": {
+    "observed_offset_mb": 8.14,
+    "breakdown": {
+      "vocab_logits_buffer_mb": 0.41,
+      "suppress_mask_buffer_mb": 0.05,
+      "dynamic_layer_cache_metadata_mb": 2.45,
+      "small_tensors_model_metadata_mb": 3.82,
+      "pytorch_caching_allocator_512b_rounding_mb": 1.41,
+      "sum_explained_mb": 8.14
+    },
+    "description": "The ~8.14 MB offset between the macro component sum (weights + pools + cross_kv + activations) and max_memory_allocated is accounted for by Whisper-base vocab logits buffer (4x1x51865 fp16 = 0.41 MB), suppress_mask (51865 bool = 0.05 MB), 259 small model weights and DynamicLayer metadata tensors (3.82 MB + 2.45 MB), and PyTorch CUDA Caching Allocator 512-byte block padding / 2 MB segment alignment (1.41 MB)."
+  }
+}

@@ -13,6 +13,8 @@ import json
 import time
 import random
 import gc
+import subprocess
+import ctypes
 import numpy as np
 import soundfile as sf
 import torch
@@ -34,6 +36,151 @@ from speech_serving.phase_aware_scheduler import (
     WHISPER_EOS_TOKEN_ID,
 )
 from paged_kv_cache.block_manager import BlockManager
+
+
+def check_session_gate(force_unsafe: bool = False) -> Dict[str, Any]:
+    """
+    Session gate (Part 0): Verify machine and GPU environment before running benchmarks.
+    Logs and checks: plugged-in state, power plan, GPU temp, power draw, graphics clock
+    under a 10s warm-up load, throttle reasons, other GPU processes, and pre-load VRAM.
+    Aborts if on battery, sw_power_cap or hw_slowdown is active, or clock < 1400 MHz,
+    unless force_unsafe is True.
+    """
+    print("\n==================================================================")
+    print("SESSION GATE PRE-FLIGHT CHECKS")
+    print("==================================================================")
+
+    # 1. Baseline VRAM before model load
+    pre_load_vram_mb = 0.0
+    if torch.cuda.is_available():
+        pre_load_vram_mb = torch.cuda.memory_allocated() / (1024 * 1024)
+        print(f"[GATE] GPU Memory Allocated before model load: {pre_load_vram_mb:.2f} MB")
+        if pre_load_vram_mb > 50.0:
+            print(f"  [GATE WARNING] Allocated memory > 50 MB ({pre_load_vram_mb:.2f} MB), potential leftover model in process!")
+
+    # 2. AC Line / Plugged-in state
+    plugged_in = True
+    battery_pct = 100
+    try:
+        class SYSTEM_POWER_STATUS(ctypes.Structure):
+            _fields_ = [
+                ("ACLineStatus", ctypes.c_byte),
+                ("BatteryFlag", ctypes.c_byte),
+                ("BatteryLifePercent", ctypes.c_byte),
+                ("SystemStatusFlag", ctypes.c_byte),
+                ("BatteryLifeTime", ctypes.c_ulong),
+                ("BatteryFullLifeTime", ctypes.c_ulong),
+            ]
+        sp = SYSTEM_POWER_STATUS()
+        if hasattr(ctypes, "windll") and hasattr(ctypes.windll, "kernel32"):
+            ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(sp))
+            plugged_in = (sp.ACLineStatus != 0)
+            battery_pct = int(sp.BatteryLifePercent)
+        print(f"[GATE] Power Source: {'AC Wall Power (Plugged In)' if plugged_in else 'BATTERY'} (Battery: {battery_pct}%)")
+    except Exception as e:
+        print(f"[GATE] Could not determine battery status: {e}")
+
+    # 3. Windows Power Plan
+    power_plan = "Unknown"
+    try:
+        plan_out = subprocess.check_output(["powercfg", "/getactivescheme"], stderr=subprocess.DEVNULL).decode().strip()
+        power_plan = plan_out
+        print(f"[GATE] Windows Power Plan: {power_plan}")
+    except Exception as e:
+        print(f"[GATE] Could not query power scheme: {e}")
+
+    # 4. Competing GPU processes
+    other_gpu_procs = []
+    try:
+        apps = subprocess.check_output(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"], stderr=subprocess.DEVNULL).decode().strip()
+        my_pid = str(os.getpid())
+        if apps:
+            for line in apps.splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3 and parts[0] != my_pid:
+                    other_gpu_procs.append({"pid": parts[0], "name": parts[1], "used_memory": parts[2]})
+        print(f"[GATE] Other GPU processes detected: {len(other_gpu_procs)}")
+        for proc in other_gpu_procs:
+            print(f"  - PID {proc['pid']}: {proc['name']} ({proc['used_memory']})")
+    except Exception as e:
+        print(f"[GATE] Could not query GPU compute apps: {e}")
+
+    # 5. 10s Warm-up Load & GPU Clocks under Load
+    print("[GATE] Running 10-second GPU warm-up load to measure clock & throttle state under load...")
+    clock_load = 0.0
+    power_load = 0.0
+    temp_load = 0.0
+    throttle_active_load = "0x0"
+    sw_power_cap_load = "Not Active"
+    hw_slowdown_load = "Not Active"
+
+    if torch.cuda.is_available():
+        t_end = time.perf_counter() + 10.0
+        mat = torch.randn(4096, 4096, device="cuda", dtype=torch.float16)
+        while time.perf_counter() < t_end - 0.5:
+            _ = torch.matmul(mat, mat)
+
+        try:
+            smi_out = subprocess.check_output([
+                "nvidia-smi",
+                "--query-gpu=clocks.gr,power.draw,temperature.gpu,clocks_throttle_reasons.active,clocks_throttle_reasons.sw_power_cap,clocks_throttle_reasons.hw_slowdown",
+                "--format=csv,noheader,nounits"
+            ], stderr=subprocess.DEVNULL).decode().strip()
+            parts = [p.strip() for p in smi_out.split(",")]
+            clock_load = float(parts[0])
+            power_load = float(parts[1])
+            temp_load = float(parts[2])
+            throttle_active_load = parts[3]
+            sw_power_cap_load = parts[4]
+            hw_slowdown_load = parts[5]
+        except Exception as e:
+            print(f"[GATE] Could not query nvidia-smi under load: {e}")
+
+        torch.cuda.synchronize()
+        del mat
+        torch.cuda.empty_cache()
+
+    print(f"[GATE] Under Load: Clock={clock_load:.0f} MHz | Power={power_load:.1f} W | Temp={temp_load:.0f} C")
+    print(f"[GATE] Throttles Under Load: SW Power Cap: {sw_power_cap_load} | HW Slowdown: {hw_slowdown_load} | Active: {throttle_active_load}")
+
+    # 6. Evaluate Gate Pass/Fail
+    failures = []
+    if not plugged_in:
+        failures.append(f"Laptop is running on battery ({battery_pct}%). Plug into AC wall power.")
+    if "active" in sw_power_cap_load.lower() and "not" not in sw_power_cap_load.lower():
+        failures.append(f"GPU SW Power Cap is active ({sw_power_cap_load}).")
+    if "active" in hw_slowdown_load.lower() and "not" not in hw_slowdown_load.lower():
+        failures.append(f"GPU HW Slowdown is active ({hw_slowdown_load}).")
+    if clock_load < 1400.0:
+        failures.append(f"Graphics clock under load is {clock_load:.0f} MHz (below 1400 MHz threshold).")
+
+    gate_passed = len(failures) == 0
+    if not gate_passed:
+        msg = "[GATE ABORT] Session gate checks failed:\n  * " + "\n  * ".join(failures) + "\nAborting to guarantee reproducible performance. Override with --force-unsafe."
+        if not force_unsafe:
+            print(f"\n{msg}\n")
+            raise RuntimeError(msg)
+        else:
+            print(f"\n[WARNING] Gate checks failed but proceeding due to --force-unsafe:\n  * " + "\n  * ".join(failures))
+
+    unsafe_state = (not gate_passed) or force_unsafe
+    print(f"[GATE] Session Gate Status: {'PASSED (SAFE)' if gate_passed else 'OVERRIDDEN (UNSAFE)'}\n")
+
+    return {
+        "gate_passed": gate_passed,
+        "unsafe_power_state": unsafe_state,
+        "plugged_in": plugged_in,
+        "battery_pct": battery_pct,
+        "power_plan": power_plan,
+        "other_gpu_processes": other_gpu_procs,
+        "vram_before_load_mb": pre_load_vram_mb,
+        "gpu_temp_under_load_c": temp_load,
+        "power_draw_under_load_w": power_load,
+        "graphics_clock_under_load_mhz": clock_load,
+        "sw_power_cap": sw_power_cap_load,
+        "hw_slowdown": hw_slowdown_load,
+        "throttle_active": throttle_active_load,
+    }
 
 
 def sync_time() -> float:
@@ -284,6 +431,9 @@ class RealSpeechBenchmark:
         max_new_tokens: int = 150,
         retain_encoder_cache: bool = False,
         cache_cross_kv: bool = False,
+        batch_encoder: bool = False,
+        no_sync_decode: bool = False,
+        avoid_redundant_cross_kv: bool = False,
     ) -> Dict[str, Any]:
         """Engine (continuous batching + paged dual cache)."""
         torch.cuda.reset_peak_memory_stats()
@@ -313,6 +463,9 @@ class RealSpeechBenchmark:
             max_batch_size=max_batch_size,
             retain_encoder_cache=retain_encoder_cache,
             cache_cross_kv=cache_cross_kv,
+            batch_encoder=batch_encoder,
+            no_sync_decode=no_sync_decode,
+            avoid_redundant_cross_kv=avoid_redundant_cross_kv,
             eos_token_id=WHISPER_EOS_TOKEN_ID,
             max_cached_encoder_inputs=100,
             device=self.device,
@@ -336,6 +489,7 @@ class RealSpeechBenchmark:
                     max_new_tokens=max_new_tokens,
                     arrival_time=r["arrival_time"],
                     eos_token_id=WHISPER_EOS_TOKEN_ID,
+                    arrival_wall_time=t_bench_start + r["arrival_time"],
                 )
                 if req_id is None:
                     # Engine backpressure active (high water mark reached)
@@ -491,9 +645,21 @@ def run_benchmark_suite(
     output_path: str = "data/real_speech_evaluation_results_v2.json",
     include_repeated: bool = False,
     bench: Optional[RealSpeechBenchmark] = None,
+    force_unsafe: bool = False,
 ) -> Dict[str, Any]:
+    # Part 0: Session gate check before model allocation
+    gate_telemetry = check_session_gate(force_unsafe=force_unsafe)
+
     if bench is None:
         bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
+
+    # Canary Run at START (20 utterances, sequential)
+    canary_samples_count = min(20, len(bench.samples))
+    canary_traffic = [{"req_id": i, "sample_idx": i, "arrival_time": 0.0} for i in range(canary_samples_count)]
+    print(f"\n--- Running Sequential Canary ({canary_samples_count} utterances, START of session) ---")
+    canary_start_res = bench.run_sequential(canary_traffic)
+    canary_start_tp = canary_start_res["throughput_audio_per_sec"]
+    print(f"Canary START throughput: {canary_start_tp:.2f}x audio-time")
 
     # 1. Warm-up run (discarded)
     print("\n--- Running Warm-up Run (5 samples, discarded) ---")
@@ -521,11 +687,13 @@ def run_benchmark_suite(
             "gpu_name": torch.cuda.get_device_name(0),
             "torch_version": torch.__version__,
             "model": "openai/whisper-base",
-            "benchmark_branch": "feature/cached-cross-kv",
+            "benchmark_branch": "profile-gap",
             "dataset": "LibriSpeech test-clean (100 stratified utterances)",
             "repeats": num_repeats,
             "session_start_time": start_iso,
             "background_load": "idle (dedicated single session)",
+            "unsafe_power_state": gate_telemetry.get("unsafe_power_state", False),
+            "session_gate": gate_telemetry,
         },
         "systems": {},
     }
@@ -649,6 +817,57 @@ def run_benchmark_suite(
                 "runs": repeat_runs,
             }
 
+    # Part 0: Reproducibility check against reference engine numbers
+    ref_engine_throughputs = {
+        "burst": 38.533,
+        "poisson_low": 9.591,
+        "poisson_high": 25.176,
+    }
+    repro_failures = []
+    print("\n==================================================================")
+    print("PART 0 REPRODUCIBILITY CHECK (Engine Flag OFF vs Reference)")
+    print("==================================================================")
+    for prof, ref_tp in ref_engine_throughputs.items():
+        if prof in results["systems"] and "engine_flag_off" in results["systems"][prof]:
+            meas_tp = results["systems"][prof]["engine_flag_off"]["aggregate"]["throughput_mean"]
+            delta_pct = abs(meas_tp - ref_tp) / ref_tp * 100.0
+            passed = delta_pct <= 15.0
+            status_tag = "PASS" if passed else "FAIL"
+            print(f"  [{status_tag}] Profile: {prof.upper()} | Measured: {meas_tp:.2f}x | Reference: {ref_tp:.2f}x | Delta: {delta_pct:.1f}%")
+            if not passed:
+                repro_failures.append({
+                    "profile": prof,
+                    "measured_throughput": meas_tp,
+                    "reference_throughput": ref_tp,
+                    "delta_pct": delta_pct,
+                })
+
+    if repro_failures:
+        results["metadata"]["session_status"] = "not reportable"
+        results["metadata"]["reproducibility_failures"] = repro_failures
+        print(f"\n[REPRODUCIBILITY WARNING] Session marked 'not reportable' because {len(repro_failures)} profiles deviated by >15% from reference:")
+        for f in repro_failures:
+            print(f"  - {f['profile']}: {f['measured_throughput']:.2f}x vs {f['reference_throughput']:.2f}x ({f['delta_pct']:.1f}% delta)")
+    else:
+        results["metadata"]["session_status"] = "reportable"
+        results["metadata"]["reproducibility_failures"] = []
+        print("\n[REPRODUCIBILITY] All engine flag OFF profiles within 15% of reference.")
+
+    # Part 0: Canary Run at END (20 utterances, sequential)
+    print(f"\n--- Running Sequential Canary ({canary_samples_count} utterances, END of session) ---")
+    canary_end_res = bench.run_sequential(canary_traffic)
+    canary_end_tp = canary_end_res["throughput_audio_per_sec"]
+    drift_pct = abs(canary_end_tp - canary_start_tp) / canary_start_tp * 100.0 if canary_start_tp > 0 else 0.0
+    print(f"Canary END throughput: {canary_end_tp:.2f}x (Start: {canary_start_tp:.2f}x, Drift: {drift_pct:.1f}%)")
+    if drift_pct > 15.0:
+        print(f"[CANARY WARNING] Sequential canary throughput drifted by {drift_pct:.1f}% (> 15%) between session start and end!")
+    results["metadata"]["canary"] = {
+        "start_throughput": canary_start_tp,
+        "end_throughput": canary_end_tp,
+        "drift_pct": drift_pct,
+        "drift_exceeded_15pct": drift_pct > 15.0,
+    }
+
     # Save to JSON
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -667,6 +886,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default="data/real_speech_evaluation_results_v2.json", help="Output JSON path")
     parser.add_argument("--include-repeated", action="store_true", help="Also evaluate repeated workload (cache on vs off)")
     parser.add_argument("--quick", action="store_true", help="Quick smoke test (5 samples, 1 repeat)")
+    parser.add_argument("--force-unsafe", action="store_true", help="Override session gate aborts on low clock or battery")
     args = parser.parse_args()
 
     reps = 1 if args.quick else args.repeats
@@ -677,4 +897,5 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         output_path=args.output,
         include_repeated=args.include_repeated,
+        force_unsafe=args.force_unsafe,
     )

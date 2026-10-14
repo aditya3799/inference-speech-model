@@ -1,0 +1,32 @@
+{
+  "static_batching": {
+    "system": "static_batching",
+    "model_weights_mb": 138.51171875,
+    "block_pool_allocated_mb": 0.0,
+    "block_pool_used_mb": 0.0,
+    "contiguous_cross_kv_mb": 70.3125,
+    "activations_mb": 98.76611328125,
+    "peak_allocated_mb": 307.59033203125,
+    "peak_reserved_mb": 328.0
+  },
+  "engine_default": {
+    "system": "engine (default pools: 6144 enc, 1024 dec)",
+    "model_weights_mb": 139.40625,
+    "block_pool_allocated_mb": 1344.0,
+    "block_pool_used_mb": 141.5625,
+    "contiguous_cross_kv_mb": 140.625,
+    "activations_mb": 83.294921875,
+    "peak_allocated_mb": 1715.466796875,
+    "peak_reserved_mb": 1754.0
+  },
+  "engine_right_sized": {
+    "system": "engine (pools right-sized to cap: 414 enc, 256 dec)",
+    "model_weights_mb": 139.40625,
+    "block_pool_allocated_mb": 127.40625,
+    "block_pool_used_mb": 141.5625,
+    "contiguous_cross_kv_mb": 140.625,
+    "activations_mb": 85.439453125,
+    "peak_allocated_mb": 501.017578125,
+    "peak_reserved_mb": 550.0
+  }
+}
