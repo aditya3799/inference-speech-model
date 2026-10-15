@@ -1,0 +1,344 @@
+{
+  "session_id": "session_20261015_010431_1d96d3",
+  "timestamp": "2026-10-15T01:04:31.802737",
+  "tail_decompositions": {
+    "poisson_high": {
+      "static_batching": {
+        "p95_threshold_s": 1.3321710751219142,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 1.439569807258522,
+          "mean_admission_wait_s": 0.7488845272591421,
+          "admission_wait_share_pct": 52.02141108289133,
+          "mean_ttft_s": 0.05705685999964771,
+          "ttft_share_pct": 3.963466009912035,
+          "mean_decode_time_s": 0.6336284199995135,
+          "decode_time_share_pct": 44.01512290718145,
+          "shares_sum_pct": 99.99999999998482
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 0.8373313353657977,
+          "mean_admission_wait_s": 0.29020178536579166,
+          "admission_wait_share_pct": 34.65793923011537,
+          "mean_ttft_s": 0.05360362699999314,
+          "ttft_share_pct": 6.401722321376613,
+          "mean_decode_time_s": 0.49352592300001563,
+          "decode_time_share_pct": 58.94033844850834,
+          "shares_sum_pct": 100.00000000000031
+        }
+      },
+      "engine_baseline": {
+        "p95_threshold_s": 5.859715004819736,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 6.468277343601585,
+          "mean_admission_wait_s": 4.6928744636013375,
+          "admission_wait_share_pct": 72.55215282695825,
+          "mean_ttft_s": 0.10221461999972234,
+          "ttft_share_pct": 1.5802448560872695,
+          "mean_decode_time_s": 1.6731882600000971,
+          "decode_time_share_pct": 25.867602316947863,
+          "shares_sum_pct": 99.99999999999339
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 3.8248023833658227,
+          "mean_admission_wait_s": 2.7363904323658814,
+          "admission_wait_share_pct": 71.54331539497369,
+          "mean_ttft_s": 0.10295355699996435,
+          "ttft_share_pct": 2.6917353285417405,
+          "mean_decode_time_s": 0.9854583939999612,
+          "decode_time_share_pct": 25.76494927648415,
+          "shares_sum_pct": 99.99999999999957
+        }
+      },
+      "engine_no_sync": {
+        "p95_threshold_s": 5.689982210796279,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 6.387579183601337,
+          "mean_admission_wait_s": 4.4542640436010785,
+          "admission_wait_share_pct": 69.73321058839306,
+          "mean_ttft_s": 0.1051709799994569,
+          "ttft_share_pct": 1.646491996051643,
+          "mean_decode_time_s": 1.8281441600003745,
+          "decode_time_share_pct": 28.620297415548606,
+          "shares_sum_pct": 99.9999999999933
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 3.5934567603655343,
+          "mean_admission_wait_s": 2.504507521365488,
+          "admission_wait_share_pct": 69.69633109236923,
+          "mean_ttft_s": 0.10431860999995479,
+          "ttft_share_pct": 2.9030155907411914,
+          "mean_decode_time_s": 0.9846306290000757,
+          "decode_time_share_pct": 27.400653316889134,
+          "shares_sum_pct": 99.99999999999956
+        }
+      },
+      "engine_batch_encoder": {
+        "p95_threshold_s": 5.948087835598836,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 6.506553859900305,
+          "mean_admission_wait_s": 4.549660419900032,
+          "admission_wait_share_pct": 69.92427201655015,
+          "mean_ttft_s": 0.09792723999962619,
+          "ttft_share_pct": 1.505055396577116,
+          "mean_decode_time_s": 1.8589662000002136,
+          "decode_time_share_pct": 28.570672586866085,
+          "shares_sum_pct": 99.99999999999335
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 3.8347168213649456,
+          "mean_admission_wait_s": 2.7398715423648743,
+          "admission_wait_share_pct": 71.4491231034273,
+          "mean_ttft_s": 0.10351530000001731,
+          "ttft_share_pct": 2.6994248812138264,
+          "mean_decode_time_s": 0.9913299790000565,
+          "decode_time_share_pct": 25.851452015358937,
+          "shares_sum_pct": 100.00000000000006
+        }
+      },
+      "engine_avoid_redundant": {
+        "p95_threshold_s": 6.189315143946441,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 6.8341028436003395,
+          "mean_admission_wait_s": 5.025364783600462,
+          "admission_wait_share_pct": 73.53364294636515,
+          "mean_ttft_s": 0.10466469999992115,
+          "ttft_share_pct": 1.5315060717579387,
+          "mean_decode_time_s": 1.7040733599995292,
+          "decode_time_share_pct": 24.93485098187065,
+          "shares_sum_pct": 99.99999999999375
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 3.969322243364786,
+          "mean_admission_wait_s": 2.864564553364783,
+          "admission_wait_share_pct": 72.16759884268045,
+          "mean_ttft_s": 0.10276600800008964,
+          "ttft_share_pct": 2.589006427278001,
+          "mean_decode_time_s": 1.0019916819999162,
+          "decode_time_share_pct": 25.24339473004162,
+          "shares_sum_pct": 100.00000000000006
+        }
+      }
+    },
+    "poisson_mid": {
+      "static_batching": {
+        "p95_threshold_s": 1.140020394075509,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 1.2452378693506034,
+          "mean_admission_wait_s": 0.5948750893510425,
+          "admission_wait_share_pct": 47.77200436903451,
+          "mean_ttft_s": 0.06763825999951223,
+          "ttft_share_pct": 5.431754178403348,
+          "mean_decode_time_s": 0.5827245199998288,
+          "decode_time_share_pct": 46.79624145254448,
+          "shares_sum_pct": 99.99999999998234
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 0.7045678241535279,
+          "mean_admission_wait_s": 0.21405985515382203,
+          "admission_wait_share_pct": 30.381724486353722,
+          "mean_ttft_s": 0.051357441999971346,
+          "ttft_share_pct": 7.2892119451626245,
+          "mean_decode_time_s": 0.4391505269998561,
+          "decode_time_share_pct": 62.3290635685009,
+          "shares_sum_pct": 100.00000000001725
+        }
+      },
+      "engine_baseline": {
+        "p95_threshold_s": 2.8966247600521453,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 3.322270172883873,
+          "mean_admission_wait_s": 1.1787745128836855,
+          "admission_wait_share_pct": 35.480994968583744,
+          "mean_ttft_s": 0.10245574000000487,
+          "ttft_share_pct": 3.0839075291420053,
+          "mean_decode_time_s": 2.041039920000185,
+          "decode_time_share_pct": 61.43509750227432,
+          "shares_sum_pct": 100.00000000000006
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 1.5565061911528937,
+          "mean_admission_wait_s": 0.5219302271530192,
+          "admission_wait_share_pct": 33.5321651863414,
+          "mean_ttft_s": 0.10349865299995145,
+          "ttft_share_pct": 6.64942122223688,
+          "mean_decode_time_s": 0.9310773110000445,
+          "decode_time_share_pct": 59.81841359142952,
+          "shares_sum_pct": 100.0000000000078
+        }
+      },
+      "engine_no_sync": {
+        "p95_threshold_s": 2.9222972551597195,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 3.34120078952692,
+          "mean_admission_wait_s": 0.9819028095266585,
+          "admission_wait_share_pct": 29.38772230045133,
+          "mean_ttft_s": 0.10616818000053171,
+          "ttft_share_pct": 3.177545639678962,
+          "mean_decode_time_s": 2.253129799999806,
+          "decode_time_share_pct": 67.43473205987198,
+          "shares_sum_pct": 100.00000000000227
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 1.5583519931532102,
+          "mean_admission_wait_s": 0.5396677031533487,
+          "admission_wait_share_pct": 34.630667880198935,
+          "mean_ttft_s": 0.10358524399991438,
+          "ttft_share_pct": 6.647101839316629,
+          "mean_decode_time_s": 0.9150990460000685,
+          "decode_time_share_pct": 58.72223028049223,
+          "shares_sum_pct": 100.00000000000779
+        }
+      },
+      "engine_batch_encoder": {
+        "p95_threshold_s": 2.7286847048866543,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 3.300767572882978,
+          "mean_admission_wait_s": 1.1544034928832867,
+          "admission_wait_share_pct": 34.973789198825656,
+          "mean_ttft_s": 0.10441680000003543,
+          "ttft_share_pct": 3.163409652283848,
+          "mean_decode_time_s": 2.0419472799996585,
+          "decode_time_share_pct": 61.862801148890576,
+          "shares_sum_pct": 100.00000000000009
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 1.4566016721524284,
+          "mean_admission_wait_s": 0.45324754715256277,
+          "admission_wait_share_pct": 31.116780642081533,
+          "mean_ttft_s": 0.10704073100001552,
+          "ttft_share_pct": 7.348661823368693,
+          "mean_decode_time_s": 0.8963133939999716,
+          "decode_time_share_pct": 61.53455753455811,
+          "shares_sum_pct": 100.00000000000833
+        }
+      },
+      "engine_avoid_redundant": {
+        "p95_threshold_s": 3.2251037450520013,
+        "tail_requests_latency_gte_p95": {
+          "count": 5,
+          "mean_total_latency_s": 3.5578956728833875,
+          "mean_admission_wait_s": 1.3672226728835108,
+          "admission_wait_share_pct": 38.42784608058749,
+          "mean_ttft_s": 0.10282017999998061,
+          "ttft_share_pct": 2.889915541470983,
+          "mean_decode_time_s": 2.087852819999898,
+          "decode_time_share_pct": 58.68223837794157,
+          "shares_sum_pct": 100.00000000000006
+        },
+        "all_requests_mean": {
+          "count": 100,
+          "mean_total_latency_s": 1.6729588021528616,
+          "mean_admission_wait_s": 0.6244632551530173,
+          "admission_wait_share_pct": 37.326875853094606,
+          "mean_ttft_s": 0.10255611000000499,
+          "ttft_share_pct": 6.1302232827269725,
+          "mean_decode_time_s": 0.9459394369999609,
+          "decode_time_share_pct": 56.54290086418568,
+          "shares_sum_pct": 100.00000000000726
+        }
+      }
+    }
+  },
+  "variant_comparisons_burst_vs_engine_baseline": {
+    "static_batching": {
+      "system": "static_batching",
+      "median_capacity_req_per_sec": 6.0256162564959475,
+      "range_capacity_req_per_sec": 0.5596131178923107,
+      "delta_vs_engine_baseline": 2.529093247927012,
+      "reference_engine_baseline_median": 3.4965230085689356,
+      "reference_engine_baseline_range": 0.22532624935607526,
+      "combined_range": 0.5596131178923107,
+      "is_distinguishable": true,
+      "assessment_label": "Distinguishable (|\u0394|=2.53 > range 0.56)"
+    },
+    "engine_no_sync": {
+      "system": "engine_no_sync",
+      "median_capacity_req_per_sec": 3.264476556331364,
+      "range_capacity_req_per_sec": 0.36483524773738996,
+      "delta_vs_engine_baseline": -0.2320464522375718,
+      "reference_engine_baseline_median": 3.4965230085689356,
+      "reference_engine_baseline_range": 0.22532624935607526,
+      "combined_range": 0.36483524773738996,
+      "is_distinguishable": false,
+      "assessment_label": "Not distinguishable (|\u0394|=0.23 <= range 0.36)"
+    },
+    "engine_batch_encoder": {
+      "system": "engine_batch_encoder",
+      "median_capacity_req_per_sec": 3.379622947364055,
+      "range_capacity_req_per_sec": 0.8901369829972143,
+      "delta_vs_engine_baseline": -0.1169000612048805,
+      "reference_engine_baseline_median": 3.4965230085689356,
+      "reference_engine_baseline_range": 0.22532624935607526,
+      "combined_range": 0.8901369829972143,
+      "is_distinguishable": false,
+      "assessment_label": "Not distinguishable (|\u0394|=0.12 <= range 0.89)"
+    },
+    "engine_avoid_redundant": {
+      "system": "engine_avoid_redundant",
+      "median_capacity_req_per_sec": 3.5051428647862686,
+      "range_capacity_req_per_sec": 0.3817301859172395,
+      "delta_vs_engine_baseline": 0.008619856217332966,
+      "reference_engine_baseline_median": 3.4965230085689356,
+      "reference_engine_baseline_range": 0.22532624935607526,
+      "combined_range": 0.3817301859172395,
+      "is_distinguishable": false,
+      "assessment_label": "Not distinguishable (|\u0394|=0.01 <= range 0.38)"
+    }
+  },
+  "variant_comparisons_poisson_high_vs_engine_baseline": {
+    "static_batching": {
+      "system": "static_batching",
+      "median_p95_latency_s": 1.3055630442474466,
+      "range_p95_latency_s": 0.06060947457654042,
+      "delta_vs_engine_baseline_s": -4.554151960572289,
+      "combined_range_s": 0.22408858334847537,
+      "is_distinguishable": true,
+      "assessment_label": "Distinguishable (|\u0394|=4.55s > range 0.22s)"
+    },
+    "engine_no_sync": {
+      "system": "engine_no_sync",
+      "median_p95_latency_s": 5.900881449817825,
+      "range_p95_latency_s": 0.4155086181505796,
+      "delta_vs_engine_baseline_s": 0.041166444998088636,
+      "combined_range_s": 0.4155086181505796,
+      "is_distinguishable": false,
+      "assessment_label": "Not distinguishable (|\u0394|=0.04s <= range 0.42s)"
+    },
+    "engine_batch_encoder": {
+      "system": "engine_batch_encoder",
+      "median_p95_latency_s": 5.52454932894625,
+      "range_p95_latency_s": 0.6759794416520899,
+      "delta_vs_engine_baseline_s": -0.335165675873486,
+      "combined_range_s": 0.6759794416520899,
+      "is_distinguishable": false,
+      "assessment_label": "Not distinguishable (|\u0394|=0.34s <= range 0.68s)"
+    },
+    "engine_avoid_redundant": {
+      "system": "engine_avoid_redundant",
+      "median_p95_latency_s": 6.23481026394611,
+      "range_p95_latency_s": 0.23533250000109618,
+      "delta_vs_engine_baseline_s": 0.37509525912637365,
+      "combined_range_s": 0.23533250000109618,
+      "is_distinguishable": true,
+      "assessment_label": "Distinguishable (|\u0394|=0.38s > range 0.24s)"
+    }
+  }
+}

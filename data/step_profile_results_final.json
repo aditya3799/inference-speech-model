@@ -1,0 +1,313 @@
+{
+  "session_id": "session_20261015_010431_1d96d3",
+  "timestamp": "2026-10-15T01:04:31.802737",
+  "telemetry_under_load": {
+    "sample_count": 7,
+    "busy_sample_count": 2,
+    "all_median_clock_mhz": 1432.0,
+    "all_min_clock_mhz": 210.0,
+    "all_max_clock_mhz": 1432.0,
+    "all_max_temp_c": 59.0,
+    "all_mean_power_w": 11.484285714285715,
+    "all_mean_utilization_pct": 10.571428571428571,
+    "all_throttle_sample_pct": 0.0,
+    "median_clock_mhz": 1432.0,
+    "min_clock_mhz": 1432.0,
+    "max_clock_mhz": 1432.0,
+    "max_temp_c": 59.0,
+    "throttle_sample_pct": 0.0,
+    "busy_median_clock_mhz": 1432.0,
+    "busy_min_clock_mhz": 1432.0,
+    "busy_max_clock_mhz": 1432.0,
+    "busy_max_temp_c": 59.0,
+    "busy_throttle_sample_pct": 0.0
+  },
+  "static_batching": {
+    "union_gpu_busy_ms": 30.07770000000002,
+    "gpu_busy_fraction": 1.0,
+    "idle_gap_ms": 0.0,
+    "kernel_launches": 971,
+    "wall_time_per_launch_ms": 0.012897167868099382,
+    "region_attribution": {
+      "self_attn": {
+        "gpu_time_ms": 0.0,
+        "launch_count": 0
+      },
+      "cross_attn": {
+        "gpu_time_ms": 0.0,
+        "launch_count": 0
+      },
+      "mlp": {
+        "gpu_time_ms": 0.308,
+        "launch_count": 6
+      },
+      "sampling": {
+        "gpu_time_ms": 0.0,
+        "launch_count": 0
+      },
+      "cache_pool_ops": {
+        "gpu_time_ms": 1.027,
+        "launch_count": 14
+      },
+      "other": {
+        "gpu_time_ms": 31.018,
+        "launch_count": 951
+      }
+    },
+    "top_kernels": [
+      {
+        "kernel_name": "aten::addmm",
+        "gpu_time_ms": 5.094,
+        "launch_count": 42
+      },
+      {
+        "kernel_name": "aten::linear",
+        "gpu_time_ms": 3.061,
+        "launch_count": 48
+      },
+      {
+        "kernel_name": "aten::transpose",
+        "gpu_time_ms": 2.732,
+        "launch_count": 132
+      },
+      {
+        "kernel_name": "aten::_efficient_attention_forward",
+        "gpu_time_ms": 2.554,
+        "launch_count": 12
+      },
+      {
+        "kernel_name": "aten::view",
+        "gpu_time_ms": 2.369,
+        "launch_count": 167
+      },
+      {
+        "kernel_name": "aten::native_layer_norm",
+        "gpu_time_ms": 2.181,
+        "launch_count": 19
+      },
+      {
+        "kernel_name": "aten::empty",
+        "gpu_time_ms": 2.142,
+        "launch_count": 150
+      },
+      {
+        "kernel_name": "aten::as_strided",
+        "gpu_time_ms": 1.704,
+        "launch_count": 138
+      },
+      {
+        "kernel_name": "aten::reshape",
+        "gpu_time_ms": 1.553,
+        "launch_count": 62
+      },
+      {
+        "kernel_name": "aten::t",
+        "gpu_time_ms": 1.077,
+        "launch_count": 48
+      },
+      {
+        "kernel_name": "aten::add",
+        "gpu_time_ms": 0.964,
+        "launch_count": 20
+      },
+      {
+        "kernel_name": "aten::_scaled_dot_product_efficient_attention",
+        "gpu_time_ms": 0.7,
+        "launch_count": 12
+      },
+      {
+        "kernel_name": "aten::layer_norm",
+        "gpu_time_ms": 0.661,
+        "launch_count": 19
+      },
+      {
+        "kernel_name": "aten::scaled_dot_product_attention",
+        "gpu_time_ms": 0.572,
+        "launch_count": 12
+      },
+      {
+        "kernel_name": "aten::cat",
+        "gpu_time_ms": 0.541,
+        "launch_count": 12
+      }
+    ],
+    "step_wall_ms": 12.523149999924499,
+    "encoder_ms_per_req": 12.35
+  },
+  "engine_baseline": {
+    "union_gpu_busy_ms": 54.57319999999996,
+    "gpu_busy_fraction": 1.0,
+    "idle_gap_ms": 0.0,
+    "kernel_launches": 1799,
+    "wall_time_per_launch_ms": 0.00898030850472118,
+    "region_attribution": {
+      "self_attn": {
+        "gpu_time_ms": 0.474,
+        "launch_count": 1
+      },
+      "cross_attn": {
+        "gpu_time_ms": 0.0,
+        "launch_count": 0
+      },
+      "mlp": {
+        "gpu_time_ms": 0.303,
+        "launch_count": 6
+      },
+      "sampling": {
+        "gpu_time_ms": 1.014,
+        "launch_count": 6
+      },
+      "cache_pool_ops": {
+        "gpu_time_ms": 5.55,
+        "launch_count": 124
+      },
+      "other": {
+        "gpu_time_ms": 50.631,
+        "launch_count": 1662
+      }
+    },
+    "top_kernels": [
+      {
+        "kernel_name": "aten::masked_fill",
+        "gpu_time_ms": 7.405,
+        "launch_count": 1
+      },
+      {
+        "kernel_name": "scheduler_bookkeeping",
+        "gpu_time_ms": 6.362,
+        "launch_count": 3
+      },
+      {
+        "kernel_name": "aten::addmm",
+        "gpu_time_ms": 4.83,
+        "launch_count": 42
+      },
+      {
+        "kernel_name": "aten::as_strided",
+        "gpu_time_ms": 4.207,
+        "launch_count": 439
+      },
+      {
+        "kernel_name": "aten::cat",
+        "gpu_time_ms": 3.825,
+        "launch_count": 72
+      },
+      {
+        "kernel_name": "aten::select",
+        "gpu_time_ms": 3.222,
+        "launch_count": 150
+      },
+      {
+        "kernel_name": "aten::transpose",
+        "gpu_time_ms": 2.615,
+        "launch_count": 133
+      },
+      {
+        "kernel_name": "aten::view",
+        "gpu_time_ms": 2.392,
+        "launch_count": 168
+      },
+      {
+        "kernel_name": "aten::linear",
+        "gpu_time_ms": 2.344,
+        "launch_count": 49
+      },
+      {
+        "kernel_name": "aten::empty",
+        "gpu_time_ms": 2.105,
+        "launch_count": 164
+      },
+      {
+        "kernel_name": "aten::slice",
+        "gpu_time_ms": 1.708,
+        "launch_count": 75
+      },
+      {
+        "kernel_name": "aten::copy_",
+        "gpu_time_ms": 1.652,
+        "launch_count": 51
+      },
+      {
+        "kernel_name": "aten::_efficient_attention_forward",
+        "gpu_time_ms": 1.626,
+        "launch_count": 12
+      },
+      {
+        "kernel_name": "aten::native_layer_norm",
+        "gpu_time_ms": 1.575,
+        "launch_count": 19
+      },
+      {
+        "kernel_name": "aten::unsqueeze",
+        "gpu_time_ms": 1.572,
+        "launch_count": 74
+      }
+    ],
+    "step_wall_ms": 16.155574999993405,
+    "encoder_ms_per_req": 12.3
+  },
+  "kernel_attribution_ranking": [
+    {
+      "region": "other",
+      "static_gpu_ms": 31.018,
+      "engine_gpu_ms": 50.631,
+      "delta_gpu_ms": 19.613,
+      "static_launches": 951,
+      "engine_launches": 1662,
+      "delta_launches": 711
+    },
+    {
+      "region": "cache_pool_ops",
+      "static_gpu_ms": 1.027,
+      "engine_gpu_ms": 5.55,
+      "delta_gpu_ms": 4.523,
+      "static_launches": 14,
+      "engine_launches": 124,
+      "delta_launches": 110
+    },
+    {
+      "region": "sampling",
+      "static_gpu_ms": 0.0,
+      "engine_gpu_ms": 1.014,
+      "delta_gpu_ms": 1.014,
+      "static_launches": 0,
+      "engine_launches": 6,
+      "delta_launches": 6
+    },
+    {
+      "region": "self_attn",
+      "static_gpu_ms": 0.0,
+      "engine_gpu_ms": 0.474,
+      "delta_gpu_ms": 0.474,
+      "static_launches": 0,
+      "engine_launches": 1,
+      "delta_launches": 1
+    },
+    {
+      "region": "cross_attn",
+      "static_gpu_ms": 0.0,
+      "engine_gpu_ms": 0.0,
+      "delta_gpu_ms": 0.0,
+      "static_launches": 0,
+      "engine_launches": 0,
+      "delta_launches": 0
+    },
+    {
+      "region": "mlp",
+      "static_gpu_ms": 0.308,
+      "engine_gpu_ms": 0.303,
+      "delta_gpu_ms": -0.0050000000000000044,
+      "static_launches": 6,
+      "engine_launches": 6,
+      "delta_launches": 0
+    }
+  ],
+  "launch_overhead_test": {
+    "static_launches": 971,
+    "engine_launches": 1799,
+    "delta_launches": 828,
+    "static_wall_per_launch_ms": 0.012897167868099382,
+    "engine_wall_per_launch_ms": 0.00898030850472118,
+    "supports_launch_overhead_hypothesis": true
+  }
+}

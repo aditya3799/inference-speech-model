@@ -5,7 +5,7 @@
 > [!NOTE]
 > **Key Empirical Highlights:**
 > 1. **Real-Speech Serving**: Integrated with `openai/whisper-base` on LibriSpeech `test-clean` (100 stratified utterances, 3 repeats), achieving **5.28% corpus WER** (95% bootstrap CI: `[3.95%, 6.89%]`) and **99.0% exact token match rate (99/100)** against Hugging Face `generate()`. Exactly one utterance diverged (`2830-3980-0051` at token 8: `"God,"` vs `"God"`, identical under Whisper text normalization).
-> 2. **Sound Full-Utterance Caching**: Context-sensitivity experiments across 50 pairs prove that chunk-level prefix sharing is **UNSOUND** for bidirectional speech encoders ($171\times$ numerical noise floor; 14/50 pairs diverge downstream), demonstrating that full-utterance caching is mathematically and empirically required.
+> 2. **Full-Utterance Caching**: Chunk-level sharing is not exactly equivalent (E1: 14/50 pairs diverge at token level; E2: 46/148), with no detectable average WER effect (spliced WER delta CIs include zero), so the engine hashes full utterances.
 > 3. **Batching vs. Paging Overhead**: Decode-path ablation isolates the benefit of batching (**1.99x speedup** of static batched over sequential) from paging overhead: re-gathering 1500-position cross-attention KV accounts for **90.0%** of the hybrid-vs-static wall-time gap. Caching cross-attention KV once recovers throughput from 28.10 to 59.99 tok/s.
 > 4. **Microbenchmark Speedups**: Continuous batching scheduler achieves steady **1.03x to 1.13x** speedups over unpaged execution under varying arrival traffic on an RTX 3050 Laptop GPU.
 > 5. **Concurrency Capacity Analysis**: Accounting for Whisper's full 17.58 MB cross-attention KV, paged memory allocation provides **1.27x** (30s padded audio) to **1.82x** (trimmed audio, analytical/hypothetical) concurrent request capacity gains over static allocations under a fixed 512 MB memory budget.
@@ -53,7 +53,7 @@ Incoming Speech Requests (Audio Mel Features / TTS Tokens)
 ### Key Architectural Invariants
 1. **Decoupled Dual-Cache Design**: Non-causal encoder representations are computed once, stored in physical block tables, and read repeatedly during all decode steps. Causal decoder KV caches are grown token-by-token.
 2. **Lookup-Before-Encode**: Audio features are hashed *before* the encoder runs. On a cache hit, the encoder forward pass is completely skipped, ref-counts are incremented, and pre-projected cross-attention KV tensors are reused.
-3. **Sound Full-Utterance Hashing**: Because Whisper's encoder is bidirectional, chunk-level representations vary depending on surrounding context. The cache indexes full audio inputs to guarantee mathematical representation invariance.
+3. **Full-Utterance Hashing**: Chunk-level sharing is not exactly equivalent (E1: 14/50 pairs diverge at token level; E2: 46/148), with no detectable average WER effect (spliced WER delta CIs include zero), so the engine hashes full utterances.
 4. **Pretrained Whisper Integration**: Wrapped via `PretrainedWhisperModel`, caching layer-specific cross-attention projections ($K_l, V_l$) during the encode pass and applying Whisper `suppress_tokens` for exact generation parity.
 5. **Memory Guard & High-Water Mark**: Backpressures incoming requests when projected utilization exceeds 75%, preventing CUDA out-of-memory crashes with zero block leaks.
 
@@ -84,8 +84,8 @@ Evaluated in `scripts/evaluate_context_sensitivity.py` (`data/encoder_context_se
   - Relative $L_2$ error: Median = **0.8540** ($384.0\times$ noise floor), p95 = **0.9956** ($447.6\times$ noise floor), Max = **1.0067** ($452.6\times$ noise floor).
   - Token-level divergence: **46 / 148 shifts diverged** (Exact match rate: **68.9%**).
   - Spliced WER delta: **+0.0074** (95% bootstrap CI: `[-0.0040, +0.0230]`).
-- **Formal Verdict:**
-  `UNSOUND: Chunk-level representations are not exactly equivalent; no detectable average WER effect; keep full-utterance keys.` Full-utterance caching is mathematically and empirically required.
+- **Verdict:**
+  Chunk-level sharing is not exactly equivalent (E1: 14/50 pairs diverge at token level; E2: 46/148), with no detectable average WER effect (spliced WER delta CIs include zero), so the engine hashes full utterances.
 
 ### 3. Paging vs. Batching Ablation & Concurrency Capacity
 Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_decomposition.py`:
@@ -121,7 +121,7 @@ Evaluated in `scripts/evaluate_paging_variants.py` and `scripts/profile_gather_d
 
 | Audio Representation (Analytical) | Cross-KV / Req (MB) | Unpaged Static Mode (Reqs) | Paged KV-Cache Mode (Reqs) | Concurrency Gain | Basis / Derivation |
 |:---|:---:|:---:|:---:|:---:|:---|
-| **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Measured Whisper audio frame allocation (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
+| **Standard 30s Padded Audio** (1500 positions) | 17.58 MB | 22 reqs (22.83 MB/req) | 28 reqs (18.14 MB/req) | **1.27x** (+27%) | Analytical: derived from allocator sizes, no run at this concurrency (12,288 B/tok, worst-case 448 vs avg 3 blocks = 48 tokens) |
 | **Trimmed Audio** (~441 positions avg) | 5.17 MB | 49 reqs (10.42 MB/req) | 89 reqs (5.73 MB/req) | **1.82x** (+82%) | *Analytical, hypothetical, no parity check* (LibriSpeech mean 8.82s = 441 pos, avg 35 dec tokens = 3 blocks) |
 
 ### 4. Real-Speech Serving Evaluation (Whisper-base on LibriSpeech)

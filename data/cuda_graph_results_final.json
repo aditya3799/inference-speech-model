@@ -1,0 +1,26 @@
+{
+  "session_id": "session_20261015_010431_1d96d3",
+  "timestamp": "2026-10-15T01:04:31.802737",
+  "static_batching": {
+    "capture_successful": true,
+    "step_time_without_graph_ms": 12.116119999991497,
+    "step_time_with_graph_ms": 1.579243000014685,
+    "speedup_ratio": 7.672106192573803,
+    "blockers": []
+  },
+  "engine_baseline": {
+    "capture_successful": false,
+    "step_time_without_graph_ms": "not measured",
+    "step_time_with_graph_ms": "not measured",
+    "speedup_ratio": "not measured",
+    "blockers": [
+      {
+        "error_type": "RuntimeError",
+        "raw_message": "CUDA error: operation failed due to a previous error during capture\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+        "offending_file": "speech_serving/phase_aware_scheduler.py",
+        "offending_line": 658,
+        "description": "Host-to-device tensor allocation and copy inside speech_serving/phase_aware_scheduler.py:658 (`token_in = torch.tensor([[req.last_token_id] for req in self.active_decode], device=self.device, dtype=torch.long)`), which triggers `CUDA error: operation not permitted when stream is capturing`. In addition, the engine's decode step requires CPU-side token synchronizations, dynamic block table lookups, and list comprehensions."
+      }
+    ]
+  }
+}

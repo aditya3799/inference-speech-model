@@ -1,0 +1,110 @@
+{
+  "session_id": "session_20261015_010431_1d96d3",
+  "timestamp": "2026-10-15T01:04:31.802737",
+  "telemetry_under_load": {
+    "sample_count": 64,
+    "busy_sample_count": 19,
+    "all_median_clock_mhz": 1012.5,
+    "all_min_clock_mhz": 210.0,
+    "all_max_clock_mhz": 1612.0,
+    "all_max_temp_c": 57.0,
+    "all_mean_power_w": 13.936718749999999,
+    "all_mean_utilization_pct": 28.546875,
+    "all_throttle_sample_pct": 0.0,
+    "median_clock_mhz": 1005.0,
+    "min_clock_mhz": 780.0,
+    "max_clock_mhz": 1170.0,
+    "max_temp_c": 57.0,
+    "throttle_sample_pct": 0.0,
+    "busy_median_clock_mhz": 1005.0,
+    "busy_min_clock_mhz": 780.0,
+    "busy_max_clock_mhz": 1170.0,
+    "busy_max_temp_c": 57.0,
+    "busy_throttle_sample_pct": 0.0
+  },
+  "static_batching": {
+    "system": "static_batching",
+    "model_weights_mb": 138.51171875,
+    "pool_blocks_used_mb": 0.0,
+    "pool_allocated_mb": 0.0,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 0.0,
+      "batched_cached_tensor_mb": 70.3125,
+      "total_contiguous_cross_kv_mb": 70.3125
+    },
+    "activations_mb": 98.76611328125,
+    "peak_allocated_mb": 307.59033203125,
+    "peak_reserved_mb": 328.0,
+    "concurrent_resident_requests_at_peak": 4
+  },
+  "engine_default_pools": {
+    "system": "engine_default_pools",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 78.0,
+    "pool_allocated_mb": 1344.0,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 70.3125,
+      "batched_cached_tensor_mb": 70.3125,
+      "total_contiguous_cross_kv_mb": 140.625
+    },
+    "activations_mb": 83.29443359375,
+    "peak_allocated_mb": 1715.46630859375,
+    "peak_reserved_mb": 1754.0,
+    "concurrent_resident_requests_at_peak": 4
+  },
+  "engine_right_sized_pools": {
+    "system": "engine_right_sized_pools",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 58.5,
+    "pool_allocated_mb": 127.40625,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 52.734375,
+      "batched_cached_tensor_mb": 52.734375,
+      "total_contiguous_cross_kv_mb": 105.46875
+    },
+    "activations_mb": 65.62841796875,
+    "peak_allocated_mb": 446.05029296875,
+    "peak_reserved_mb": 468.0,
+    "concurrent_resident_requests_at_peak": 3
+  },
+  "engine_avoid_redundant_cross_kv": {
+    "system": "engine_avoid_redundant_cross_kv",
+    "model_weights_mb": 139.40625,
+    "pool_blocks_used_mb": 58.5,
+    "pool_allocated_mb": 127.40625,
+    "contiguous_cross_kv": {
+      "per_request_cached_tensor_mb": 0.0,
+      "batched_cached_tensor_mb": 52.734375,
+      "total_contiguous_cross_kv_mb": 52.734375
+    },
+    "activations_mb": 61.67529296875,
+    "peak_allocated_mb": 389.36279296875,
+    "peak_reserved_mb": 428.0,
+    "concurrent_resident_requests_at_peak": 3
+  },
+  "residency_explanation": "In the default configuration, 4 requests were resident at the measurement point (4 requests x 17.58 MB cross-KV = 70.3 MB per-request cross-KV, and 376 enc blocks + 40 dec blocks = 71.2 MB pool in use). In the right-sized run, 3 requests were resident at that measurement point (3 requests x 17.58 MB = 52.7 MB cross-KV, and 58.5 MB pool in use).",
+  "memory_snapshot_account": {
+    "status": "itemized from torch.cuda.memory_snapshot()",
+    "snapshot_segments_count": 3,
+    "total_snapshot_allocated_mb": 8.140625,
+    "total_snapshot_reserved_mb": 18.0,
+    "allocator_block_states_mb": {
+      "inactive": 9.859375,
+      "active_allocated": 8.140625
+    }
+  },
+  "parity_baseline": {
+    "avoid_redundant_cross_kv": false,
+    "total_samples": 20,
+    "exact_matches": 20,
+    "exact_utterance_match_pct": 100.0,
+    "token_match_rate_pct": 100.0
+  },
+  "parity_avoid_redundant": {
+    "avoid_redundant_cross_kv": true,
+    "total_samples": 20,
+    "exact_matches": 20,
+    "exact_utterance_match_pct": 100.0,
+    "token_match_rate_pct": 100.0
+  }
+}
