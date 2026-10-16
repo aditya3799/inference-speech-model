@@ -1,49 +1,95 @@
-# Paged Dual-Cache Speech Serving Engine
+# Hybrid Paged Speech Serving Engine
 
-This repository explores a phase-aware Whisper serving engine with paged encoder and decoder KV caches, eager and CUDA-graph decode paths, real-speech parity checks, and reproducible benchmark reports.
+This repository implements a phase-aware Whisper serving engine that batches encoder work, hands immutable encoder cross-attention KV directly to CUDA-graph slots, and retains paged KV management for the decoder's growing self-attention state.
 
-The current matched benchmark is useful as an observed run, but not as a clean performance conclusion: its telemetry gate failed because cross-system busy-clock spread was 52.09% and sequential-canary drift was 15.28%. Source: [`data/matched_decoder_comparison_burst_poisson.json`](data/matched_decoder_comparison_burst_poisson.json).
+The benchmark medians below are indicative rather than final performance claims because the runs failed the GPU clock-stability gate. Each displayed metric is the independent median of three runs, so a table column does not necessarily represent one physical run. Source: [`Speech-Serving Engine Median Benchmark Results - Single Table - Sectioned.docx`](Speech-Serving%20Engine%20Median%20Benchmark%20Results%20-%20Single%20Table%20-%20Sectioned.docx).
 
-## Architecture: Dual-Cache Speech Serving
+## Architecture
 
-The serving path separates long-lived encoder cross-attention KV from autoregressive decoder KV. `EncoderBlockManager` and `BlockManager` own the physical pools; `DualCacheManager` coordinates allocation; `PhaseAwareSpeechScheduler` admits, encodes, prefills, batches decode work, and releases blocks deterministically.
+The optimized path is a hybrid cache architecture:
 
-The eager decoder remains the default. CUDA-graph decode is opt-in through `graph_decode=True`; graph buffers, slots, static masks, and captured buckets are not created when the flag is off. Optional phase timing is independently default-off.
+```text
+batched Whisper encoder
+    -> contiguous cross-attention KV
+    -> direct one-time handoff into fixed CUDA-graph slots
 
-### Key Architectural Invariants
+autoregressive decoder
+    -> continuously batched CUDA-graph decode
+    -> dynamically paged self-attention KV
+```
 
-- Encoder positions, not mel frames, determine encoder-block admission.
-- Shared encoder blocks are read-only on cache hits; only freshly allocated blocks are written.
+`PhaseAwareSpeechScheduler` admits requests, batches compatible encoder work, performs decoder prefill, continuously batches active decoding requests, and releases graph slots and decoder blocks deterministically.
+
+### Encoder-side changes
+
+- `batch_encoder=True` combines multiple queued audio inputs into one encoder forward pass when at least two requests and multiple engine slots are available.
+- `graph_direct_encoder_kv=True` keeps the encoder-produced cross-attention K/V contiguous and hands it directly to the graph path.
+- The direct path skips encoder paged-block allocation, block writes, and the subsequent gather back into contiguous tensors.
+- `cache_cross_kv=True` prepares immutable cross-attention KV once at encoder-to-decoder handoff and reuses it for every generated token.
+- Encoder-cache retention is disabled for this benchmark (`retain_encoder_cache=False`), so completed requests release their contiguous encoder state instead of preserving it for reuse.
+
+The encoder network itself is unchanged: the optimization does not introduce quantization, pruning, layer fusion, reduced audio length, or a different Whisper architecture.
+
+### Decoder-side behavior
+
+- Decoder self-attention KV remains paged because it grows token by token and benefits from block-level allocation and release.
+- CUDA-graph decoding uses fixed slots and captured buckets to reduce Python and kernel-launch overhead.
+- Graph completion state is read back every four steps (`graph_readback_k=4`) rather than synchronizing after every token.
+- Supported graph-buffer transfers are non-blocking, and released graph slots are overwritten on reuse instead of being unconditionally zeroed.
+- The eager decoder remains available as the compatibility baseline; graph-specific buffers are created only when graph decoding is enabled.
+
+### Key invariants
+
+- Encoder positions, rather than mel frames, determine encoder sequence lengths and any non-direct-path block admission.
+- Direct encoder-KV handoff requires graph decoding and cannot be combined with retained encoder-cache reuse.
 - Decoder blocks and graph slots are released on completion and failure paths.
 - Variable-length batches carry explicit self-attention and cross-attention masks.
-- The graph path uses fixed buffers and buckets while preserving the eager path as the compatibility baseline.
-- Whisper prompt tokens, EOS handling, suppression behavior, and cached cross-attention projections must preserve generation parity.
+- Whisper prompt tokens, EOS handling, token suppression, and cached cross-attention projections preserve generation quality.
 
-## Matched decoder results
+## Median benchmark results
 
-All figures below are regenerated from the same four-system run. Ratios are right/left, so they compare the same architecture across decoder modes or the same decoder mode across architectures. This replaces the former unmatched eager-static versus graphed-engine comparison.
+### Burst traffic
 
-| Traffic | Matched comparison | Completion-rate ratio | Wall-time ratio | p50 ratio | p95 ratio |
-|---|---|---:|---:|---:|---:|
-| burst | static graph / static eager | 2.897x | 0.345x | 0.472x | 0.355x |
-| burst | hybrid graph / hybrid eager | 2.898x | 0.345x | 0.365x | 0.346x |
-| burst | hybrid / static, eager decoder | 0.547x | 1.828x | 2.179x | 1.877x |
-| burst | hybrid / static, graphed decoder | 0.547x | 1.827x | 1.686x | 1.830x |
-| poisson_high_4_0 | static graph / static eager | 1.026x | 0.975x | 0.243x | 0.363x |
-| poisson_high_4_0 | hybrid graph / hybrid eager | 1.323x | 0.756x | 0.080x | 0.232x |
-| poisson_high_4_0 | hybrid / static, eager decoder | 0.751x | 1.331x | 8.959x | 8.626x |
-| poisson_high_4_0 | hybrid / static, graphed decoder | 0.969x | 1.032x | 2.938x | 5.511x |
+| Metric | Sequential | Static batching | Static graph | Hybrid before | Hybrid cross-KV | Hybrid after | Hybrid encoder optimized |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Capacity (req/s) | 4.300 | 8.854 | 17.519 | 4.083 | 4.750 | 11.008 | **19.640** |
+| Audio throughput (x) | 37.914 | 78.067 | 154.461 | 35.997 | 41.882 | 97.051 | **173.158** |
+| Wall time (s) | 23.255 | 11.294 | 5.708 | 24.493 | 21.052 | 9.085 | **5.092** |
+| TTFT p50 (s) | 11.539 | 5.589 | 3.296 | 11.963 | 10.457 | 4.547 | **2.590** |
+| TTFT p95 (s) | 22.239 | 10.678 | 5.446 | 22.950 | 19.797 | 8.591 | **4.790** |
+| Latency p50 (s) | 11.802 | 5.974 | 3.423 | 12.809 | 11.191 | 4.792 | **2.728** |
+| Latency p95 (s) | 22.288 | 10.884 | 5.521 | 23.507 | 20.258 | 8.846 | **4.913** |
+| Peak VRAM (MB) | 286.96 | 385.49 | 592.08 | 1842.81 | 1842.81 | 1870.31 | **732.89** |
+| WER (%) | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 |
+| Exact match (%) | 100 | 100 | 100 | 99 | 99 | 99 | 99 |
 
-The headline matched ratios are: burst hybrid graph/eager completion rate 2.898x, burst graph hybrid/static completion rate 0.547x, arrival-paced hybrid graph/eager completion rate 1.323x, and arrival-paced graph hybrid/static completion rate 0.969x.
+For burst traffic, the encoder-optimized hybrid reached 19.640 req/s versus 17.519 req/s for static graph, while reducing median wall time from 5.708 s to 5.092 s and p50 TTFT from 3.296 s to 2.590 s. Its 732.89 MB peak VRAM was substantially below the 1870.31 MB hybrid-after result because the direct path removed the redundant paged encoder-KV representation and gather, although it remained above static graph's 592.08 MB.
 
-## Serving parity
+### Poisson high traffic
 
-| Traffic | Requests | Exact token match | WER | Reference WER |
-|---|---:|---:|---:|---:|
-| burst | 100 | 99.0% | 5.282% | 5.282% |
-| poisson_4_0 | 100 | 99.0% | 5.282% | 5.282% |
+Arrival rate: `lambda = 4.0` requests per second.
 
-Source: [`data/serving_parity_graph.json`](data/serving_parity_graph.json). The parity gate passed even though one utterance differed in each traffic profile; WER matched the reference.
+| Metric | Sequential | Static batching | Static graph | Hybrid before | Hybrid cross-KV | Hybrid after | Hybrid encoder optimized |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Capacity (req/s) | 4.087 | 4.294 | 4.364 | 3.961 | 4.205 | 4.347 | **4.369** |
+| Audio throughput (x) | 36.038 | 37.857 | 38.477 | 34.927 | 37.077 | 38.327 | **38.525** |
+| Wall time (s) | 24.465 | 23.290 | 22.914 | 25.243 | 23.780 | 23.004 | **22.886** |
+| TTFT p50 (s) | 1.092 | 0.163 | 0.037 | 1.136 | 0.416 | 0.078 | **0.032** |
+| TTFT p95 (s) | 1.979 | 0.429 | 0.157 | 2.122 | 1.261 | 0.164 | **0.052** |
+| Latency p50 (s) | 1.309 | 0.510 | 0.131 | 2.009 | 1.071 | 0.221 | **0.124** |
+| Latency p95 (s) | 2.191 | 0.795 | 0.244 | 3.177 | 2.219 | 0.426 | **0.226** |
+| Peak VRAM (MB) | 376.34 | 496.31 | **586.33** | 1933.94 | 1932.66 | 1958.69 | 796.44 |
+| WER (%) | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 | 5.282 |
+| Exact match (%) | 100 | 99 | 99 | 99 | 99 | 99 | 99 |
+
+At this arrival rate, throughput is capped near 4.36 req/s, so capacity is effectively tied across the graph configurations. The clearer benefit is latency: the encoder-optimized hybrid recorded 0.052 s p95 TTFT and 0.226 s p95 end-to-end latency, compared with 0.157 s and 0.244 s for static graph.
+
+## Correctness and evidence quality
+
+- WER remained 5.282% for every configuration in both traffic profiles.
+- Exact token match was 99% for the optimized hybrid, while the aggregate WER matched the other systems.
+- Before external publication, record the exact Whisper checkpoint and speech-dataset subset associated with the reported WER.
+- The benchmark failed its GPU clock-stability gate, so differences should be confirmed in a clean-clock session before being treated as portable performance conclusions.
 
 ## Tested environment
 
@@ -55,43 +101,42 @@ Source: [`data/serving_parity_graph.json`](data/serving_parity_graph.json). The 
 | Triton | 3.8.0 |
 | NVIDIA driver | 551.76 |
 
-These are the versions recorded by the accepted matched JSON and therefore the versions pinned in `requirements.txt`.
-
 ## Repository structure
 
-- `speech_serving/`: model wrapper, cache managers, scheduler, graph buffers, and timing support.
-- `scripts/`: benchmark, parity, profiling, report, notebook, and documentation generators.
-- `data/`: source JSON plus generated Markdown reports.
+- `speech_serving/`: model wrapper, cache managers, phase-aware scheduler, graph buffers, and timing support.
+- `paged_kv_cache/`: paged decoder-cache implementation.
+- `scripts/`: benchmark, parity, profiling, report, and notebook generators.
+- `data/`: benchmark JSON and generated reports.
 - `test_speech_engine.py`: unit and integration coverage for eager, cache, pretrained, and graph behavior.
-- `real_speech_serving_v2.ipynb`: real-speech evaluation notebook.
-- `hybrid_decoder_before_after.ipynb`: matched decoder comparison notebook.
+- `real_speech_serving_v2.ipynb`: streamlined real-speech comparison notebook.
+- `hybrid_decoder_before_after.ipynb`: hybrid decoder comparison notebook.
 
-## Quickstart & reproduction
+## Quickstart and reproduction
 
-Create a Python environment with the CUDA runtime expected by your PyTorch wheel, then install the pinned dependencies:
+Create a Python environment with the CUDA runtime expected by the PyTorch wheel, then install the pinned dependencies:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-Run the complete automated suite:
+Run the automated suite:
 
 ```powershell
 python -m pytest -q
 ```
 
-Regenerate the matched report and these documents from JSON:
+Run the real-speech comparison, including the encoder-handoff optimization:
 
 ```powershell
-python scripts/generate_matched_decoder_report.py --input data/matched_decoder_comparison_burst_poisson.json --output data/matched_decoder_comparison_burst_poisson.md
-python scripts/generate_docs_from_json.py
+python scripts/run_hybrid_before_after_burst.py
 ```
 
-To reproduce the benchmark itself on a CUDA-capable system, run `scripts/run_hybrid_before_after_burst.py`; treat a run as suitable for conclusions only when its parity and telemetry gates pass.
+Use `--encoder-ablation-only` to compare static graph, the graph-engine baseline, and the encoder-optimized hybrid directly. Treat a run as suitable for conclusions only when its parity and telemetry gates pass.
 
 ## Limitations
 
-- The documented matched session is telemetry-invalid, so its ratios are observations rather than portable claims.
-- Results come from one laptop GPU and one real-speech subset.
-- CUDA-graph decode uses delayed token readback, which can execute extra slot steps after a logical stop condition.
-- Static batching and the hybrid scheduler have different orchestration and memory-management responsibilities even when decoder mode is matched.
+- Current medians come from three runs per metric on one laptop GPU and one real-speech subset.
+- The session failed the clock-stability gate, so small differences may reflect hardware-state variation.
+- Poisson-high throughput is arrival-rate limited and should be interpreted primarily through latency.
+- CUDA-graph decode uses delayed token readback and can execute extra slot steps after a logical stop condition.
+- Static batching and the hybrid scheduler have different orchestration and memory-management responsibilities.

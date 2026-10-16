@@ -1,4 +1,8 @@
-"""Regenerate README.md and FINDINGS.md numeric results from benchmark JSON."""
+"""Regenerate FINDINGS.md numeric results from benchmark JSON.
+
+README.md uses the newer sectioned median benchmark document and is maintained
+separately so this legacy matched-run generator cannot overwrite it.
+"""
 
 import json
 from pathlib import Path
@@ -187,10 +191,9 @@ The matched run's telemetry gate failed: busy-clock spread was {gate['clock_spre
 - Performance numbers in README and FINDINGS are generated from `data/matched_decoder_comparison_burst_poisson.json`.
 - Parity numbers are generated from `data/serving_parity_graph.json`.
 - `scripts/generate_matched_decoder_report.py` recomputes matched ratios from raw system rows.
-- `scripts/generate_docs_from_json.py` rewrites both documents, preventing hand-copied numeric drift.
+- `scripts/generate_docs_from_json.py` rewrites `FINDINGS.md`; the README uses the newer sectioned median benchmark document.
 """
 
-    (ROOT / "README.md").write_text(readme, encoding="utf-8", newline="\n")
     (ROOT / "FINDINGS.md").write_text(findings, encoding="utf-8", newline="\n")
 
 
