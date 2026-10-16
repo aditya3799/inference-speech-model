@@ -1,4 +1,4 @@
-"""Generate the five-stage, 100-utterance real-speech comparison notebook."""
+"""Generate the streamlined real-speech serving comparison notebook."""
 
 import json
 from pathlib import Path
@@ -13,166 +13,267 @@ def py(text):
 
 
 cells = [
-    md("""# Real-Speech Serving: Five-Stage Optimization Comparison
+    md("""# Real-Speech Serving Comparison Lab
 
-This notebook compares the complete progression on the same 100 LibriSpeech utterances under **burst** and **Poisson-high (4 requests/s)** traffic:
+This notebook keeps the execution-first style of the original paged dual-cache notebook while making the production comparison compact and repeatable. Every row uses the same Whisper checkpoint, LibriSpeech subset, arrival schedule, token limit, and parity criteria.
 
-1. `sequential`
-2. `static_batching`
-3. `hybrid_engine` — paged continuous batching with per-step cross-KV gathers
-4. `hybrid_one_time_cross_kv` — cross-KV gathered once at handoff and reused
-5. `hybrid_graph_no_host_sync` — one-time cross-KV plus removed per-step host tensor creation/CPU token sync, CUDA graph replay, GPU argmax, persistent buffers, and K=4 readback
+### Systems compared
 
-Every implementation must first pass the 100-utterance parity gate. A failing implementation is not benchmarked.
+1. **Sequential** — one request at a time.
+2. **Static batching** — fixed eager batches.
+3. **Static graph** — fixed batches with CUDA-graph decode.
+4. **Paged KV engine** — continuous batching with cross-KV gathered during decode.
+5. **Cross-KV engine** — continuous batching with cross-KV gathered once and reused.
+6. **Graph engine** — persistent CUDA-graph decoder buffers.
+7. **Encoder-optimized graph engine** — batched encoder and direct encoder-KV-to-graph-slot handoff.
+
+Correctness stays beside performance: WER and exact-token match are displayed in every main comparison table.
 """),
-    py("""import json
+    md("""---
+## 1. Environment Setup & Experiment Controls
+
+`full` runs the configured real-speech experiment. `quick` uses a smaller sample and one measured repeat. `cached` only renders the existing JSON. Launch Jupyter from the repository root.
+"""),
+    py("""%load_ext autoreload
+%autoreload 2
+
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
+from IPython.display import display
+
 REPO_ROOT = Path.cwd()
-if not (REPO_ROOT / "scripts" / "run_five_system_comparison.py").exists():
+RUNNER = REPO_ROOT / "scripts" / "run_hybrid_before_after_burst.py"
+OUTPUT_JSON = REPO_ROOT / "data" / "streamlined_serving_comparison.json"
+if not RUNNER.exists():
     raise RuntimeError("Launch Jupyter from the repository root")
 
-PYTHON = sys.executable
-OUTPUT_JSON = REPO_ROOT / "data" / "real_speech_five_system_comparison.json"
-
-# full runs the complete comparison. cached only renders an existing result.
-RUN_MODE = os.environ.get("REAL_SPEECH_RUN_MODE", "full")
+RUN_MODE = os.environ.get("REAL_SPEECH_RUN_MODE", "full")  # full | quick | cached
 REPEATS = 3
-assert RUN_MODE in {"full", "cached"}
-print("Run mode:", RUN_MODE)
-print("Measured repeats:", REPEATS)
-print("Python:", PYTHON)
-"""),
-    md("""## 1. Environment
+NUM_REQUESTS = 100
+INCLUDE_POISSON = True
+SYSTEMS_TO_RUN = [
+    "sequential",
+    "static_batching",
+    "static_graph",
+    "hybrid_before",
+    "hybrid_cross_kv",
+    "hybrid_after",
+    "hybrid_encoder_optimized",
+]
 
-The benchmark uses the current notebook kernel's Python environment. Confirm that CUDA and the pinned package versions are active before starting the long run.
+if RUN_MODE == "quick":
+    REPEATS, NUM_REQUESTS = 1, 20
+assert RUN_MODE in {"full", "quick", "cached"}
+print(f"Mode={RUN_MODE} | requests={NUM_REQUESTS} | repeats={REPEATS}")
+print("Systems:", ", ".join(SYSTEMS_TO_RUN))
 """),
     py("""import torch
 import transformers
-import triton
 
-print("CUDA available:", torch.cuda.is_available())
-print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none")
-print("Torch:", torch.__version__)
-print("Transformers:", transformers.__version__)
-print("Triton:", triton.__version__)
-subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,clocks.gr,power.draw", "--format=csv,noheader"], check=False)
+try:
+    import triton
+    triton_version = triton.__version__
+except ImportError:
+    triton_version = "not installed"
+
+environment = {
+    "Python": sys.version.split()[0],
+    "CUDA available": torch.cuda.is_available(),
+    "GPU": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
+    "PyTorch": torch.__version__,
+    "Transformers": transformers.__version__,
+    "Triton": triton_version,
+}
+display(pd.DataFrame(environment.items(), columns=["Component", "Value"]))
 """),
-    md("""## 2. Confirm the five implementations
+    md("""---
+## 2. Confirm the Executable Configurations
 
-These are separate runtime configurations, not renamed copies. In particular, the legacy hybrid engine gathers encoder cross-KV from paged blocks on every decode step, while the one-time version caches it at handoff. The final graph version additionally removes per-step host tensor construction and per-token CPU synchronization.
+The table comes directly from the runner. This prevents notebook labels from drifting away from the actual flags used by the engine.
 """),
-    py("""from scripts.run_five_system_comparison import DESCRIPTIONS, SYSTEMS
+    py("""from scripts.run_hybrid_before_after_burst import SYSTEMS
 
-for index, (name, options) in enumerate(SYSTEMS, 1):
-    print(f"{index}. {name}")
-    print("   options:", options)
-    print("   ", DESCRIPTIONS[name])
+system_configs = {name: config for name, config in SYSTEMS}
+config_rows = []
+for name in SYSTEMS_TO_RUN:
+    config = system_configs[name]
+    config_rows.append({
+        "System": name,
+        "Kind": config["kind"],
+        "Decoder": config["decode"],
+        "Cross-KV reuse": config.get("cache_cross_kv", False),
+        "CUDA graph": config.get("graph_decode", False),
+        "Encoder batch": config.get("batch_encoder", False),
+        "Direct encoder KV": config.get("graph_direct_encoder_kv", False),
+        "Readback K": config.get("readback_k", 1),
+    })
+display(pd.DataFrame(config_rows).style.hide(axis="index"))
 """),
-    md("""## 3. Execute parity gate and measured comparison
+    md("""---
+## 3. Run the Parity-Gated Comparison
 
-The runner performs:
-
-- 100-utterance burst parity preflight for all five systems;
-- a discarded warm-up for every system;
-- three measured repeats of burst and Poisson-high traffic;
-- cyclic system-order rotation to reduce systematic thermal/order bias;
-- median latency, throughput, capacity, VRAM, WER, and exact-match aggregation.
-
-Expect this cell to take a substantial amount of time.
+The runner performs a correctness preflight, discarded warm-up, cyclic execution ordering, GPU/CPU telemetry, and a sequential canary. A failed telemetry gate does not erase results, but it prevents treating them as clean performance conclusions.
 """),
-    py("""if RUN_MODE == "full":
-    subprocess.run(
-        [PYTHON, "-u", "scripts/run_five_system_comparison.py", "--repeats", str(REPEATS)],
-        cwd=REPO_ROOT,
-        check=True,
-    )
+    py("""if RUN_MODE != "cached":
+    command = [
+        sys.executable, "-u", str(RUNNER),
+        "--repeats", str(REPEATS),
+        "--num-requests", str(NUM_REQUESTS),
+        "--systems", ",".join(SYSTEMS_TO_RUN),
+        "--output", str(OUTPUT_JSON),
+    ]
+    if INCLUDE_POISSON:
+        command.append("--include-poisson-high")
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
 elif not OUTPUT_JSON.exists():
-    raise FileNotFoundError("No cached result exists. Set RUN_MODE='full'.")
+    raise FileNotFoundError(f"Cached result not found: {OUTPUT_JSON}")
 
 results = json.loads(OUTPUT_JSON.read_text(encoding="utf-8"))
-print("Result status:", results["status"])
-assert results["status"] == "VALID", results.get("invalid_systems")
+print("Session:", results["session_id"])
+print("Status:", results["status"])
 """),
-    md("""## 4. Parity gate
+    md("""---
+## 4. Correctness Gate
 
-Exact match must be at least 99%, and WER must remain within 0.2 percentage points of the Hugging Face reference.
+Performance rows are valid only when exact token match is at least the runner threshold and WER remains within its allowed distance from the Hugging Face reference.
 """),
-    py("""import pandas as pd
+    py("""parity = pd.DataFrame([
+    {
+        "System": name,
+        "Status": gate["status"],
+        "Exact match (%)": gate["exact_match_pct"],
+        "WER (%)": gate["wer_pct"],
+        "HF WER (%)": gate["reference_wer_pct"],
+        "WER delta (points)": gate["wer_delta_points"],
+    }
+    for name, gate in results["parity_gate"].items()
+])
+display(parity.round(3).style.hide(axis="index"))
+"""),
+    md("""---
+## 5. Real-Speech Summary
 
-parity_rows = []
-for name, gate in results["parity_gate"].items():
-    parity_rows.append({"system": name, **gate})
-parity_table = pd.DataFrame(parity_rows)
-display(parity_table)
+This is the primary comparison. It follows the original notebook’s wide-table behavior: latency, TTFT, memory, WER, exact match, and throughput are visible together instead of being split across unrelated outputs.
 """),
-    md("""## 5. Real-speech comparison tables
-
-Each row is the median of the measured repeats. Burst service capacity is `100 / wall_time`; Poisson throughput is arrival-limited, so latency and queueing are the important measures there.
-"""),
-    py("""comparison_rows = []
+    py("""summary_rows = []
 for profile_name, profile in results["profiles"].items():
     for system_name, metrics in profile["systems"].items():
-        comparison_rows.append({
-            "profile": profile_name,
-            "system": system_name,
-            "capacity_req_s": metrics["service_capacity_req_per_sec_median"],
-            "audio_throughput_x": metrics["throughput_audio_per_sec_median"],
-            "wall_time_s": metrics["wall_time_s_median"],
-            "TTFT_p50_s": metrics["ttft_p50_s_median"],
-            "TTFT_p95_s": metrics["ttft_p95_s_median"],
-            "latency_p50_s": metrics["latency_p50_s_median"],
-            "latency_p95_s": metrics["latency_p95_s_median"],
-            "peak_VRAM_MB": metrics["peak_vram_allocated_mb_median"],
-            "WER_pct": metrics["wer_pct"],
-            "exact_match_pct": metrics["exact_match_pct"],
+        summary_rows.append({
+            "Traffic": profile_name,
+            "System": system_name,
+            "Status": metrics["status"],
+            "Capacity (req/s)": metrics["service_capacity_req_per_sec_median"],
+            "Audio throughput (x)": metrics["throughput_audio_per_sec_median"],
+            "Wall (s)": metrics["wall_time_s_median"],
+            "TTFT p50 (s)": metrics["ttft_p50_s_median"],
+            "TTFT p95 (s)": metrics["ttft_p95_s_median"],
+            "Latency p50 (s)": metrics["latency_p50_s_median"],
+            "Latency p95 (s)": metrics["latency_p95_s_median"],
+            "Peak VRAM (MB)": metrics["peak_vram_allocated_mb_median"],
+            "WER (%)": metrics["wer_pct"],
+            "Exact match (%)": metrics["exact_match_pct"],
         })
 
-comparison = pd.DataFrame(comparison_rows)
+summary = pd.DataFrame(summary_rows)
 for profile_name in results["profiles"]:
-    print("\\n", profile_name.upper())
-    display(comparison[comparison["profile"] == profile_name].reset_index(drop=True))
+    print("=" * 120)
+    print(profile_name.upper())
+    display(
+        summary[summary["Traffic"] == profile_name]
+        .drop(columns="Traffic")
+        .reset_index(drop=True)
+        .round(3)
+        .style.hide(axis="index")
+        .background_gradient(subset=["Capacity (req/s)"], cmap="Greens")
+        .background_gradient(subset=["Latency p95 (s)"], cmap="Reds")
+    )
 """),
-    md("""## 6. Incremental effect of each optimization
+    md("""---
+## 6. Streamlined Optimization Comparisons
 
-This table makes the requested progression explicit. Positive capacity change and negative latency change are improvements.
+Ratios are right/left. Capacity above `1.0x` is faster; latency below `1.0x` is lower. These comparisons isolate the main experimental questions without mixing unrelated architectures or decoder modes.
 """),
-    py("""system_order = [name for name, _ in SYSTEMS]
-delta_rows = []
+    py("""comparison_pairs = [
+    ("sequential", "static_batching", "batching vs sequential"),
+    ("static_batching", "static_graph", "graph effect on static"),
+    ("hybrid_before", "hybrid_cross_kv", "one-time cross-KV reuse"),
+    ("hybrid_cross_kv", "hybrid_after", "graph effect on engine"),
+    ("hybrid_after", "hybrid_encoder_optimized", "encoder handoff optimization"),
+    ("static_graph", "hybrid_encoder_optimized", "matched graph architecture"),
+]
+
+ratio_rows = []
 for profile_name, profile in results["profiles"].items():
-    previous_name = None
-    for system_name in system_order:
-        current = profile["systems"][system_name]
-        if previous_name is not None:
-            previous = profile["systems"][previous_name]
-            delta_rows.append({
-                "profile": profile_name,
-                "transition": f"{previous_name} -> {system_name}",
-                "capacity_change_pct": (
-                    current["service_capacity_req_per_sec_median"] / previous["service_capacity_req_per_sec_median"] - 1
-                ) * 100,
-                "latency_p50_change_pct": (
-                    current["latency_p50_s_median"] / previous["latency_p50_s_median"] - 1
-                ) * 100,
-                "latency_p95_change_pct": (
-                    current["latency_p95_s_median"] / previous["latency_p95_s_median"] - 1
-                ) * 100,
-                "VRAM_change_MB": current["peak_vram_allocated_mb_median"] - previous["peak_vram_allocated_mb_median"],
-            })
-        previous_name = system_name
+    systems = profile["systems"]
+    for left, right, question in comparison_pairs:
+        if left not in systems or right not in systems:
+            continue
+        a, b = systems[left], systems[right]
+        ratio_rows.append({
+            "Traffic": profile_name,
+            "Question": question,
+            "Comparison": f"{right} / {left}",
+            "Capacity ratio": b["service_capacity_req_per_sec_median"] / a["service_capacity_req_per_sec_median"],
+            "Wall ratio": b["wall_time_s_median"] / a["wall_time_s_median"],
+            "TTFT p95 ratio": b["ttft_p95_s_median"] / a["ttft_p95_s_median"],
+            "Latency p95 ratio": b["latency_p95_s_median"] / a["latency_p95_s_median"],
+            "WER delta": b["wer_pct"] - a["wer_pct"],
+        })
 
-display(pd.DataFrame(delta_rows))
+ratios = pd.DataFrame(ratio_rows)
+display(ratios.round(3).style.hide(axis="index"))
 """),
-    md("""## Interpretation
+    md("""---
+## 7. Repeat-Level Results
 
-The comparison that directly answers Nathan's question is:
+Medians can hide order and thermal effects. Use these rows to inspect variability before accepting an optimization.
+"""),
+    py("""repeat_rows = []
+for profile_name, profile in results["profiles"].items():
+    for system_name, metrics in profile["systems"].items():
+        for run in metrics["runs"]:
+            repeat_rows.append({
+                "Traffic": profile_name,
+                "System": system_name,
+                "Repeat": run["repeat"],
+                "Order": run["order_index"],
+                "Capacity (req/s)": run["service_capacity_req_per_sec"],
+                "Latency p95 (s)": run["latency_p95_s"],
+                "TTFT p95 (s)": run["ttft_p95_s"],
+                "Exact match (%)": run["exact_match_pct"],
+                "WER (%)": run["wer_pct"],
+                "Run gate": run["run_gate_passed"],
+            })
+display(pd.DataFrame(repeat_rows).round(3).style.hide(axis="index"))
+"""),
+    md("""---
+## 8. Session Quality Gate
 
-- `hybrid_one_time_cross_kv` versus `hybrid_graph_no_host_sync`
+Do not publish speed conclusions unless this gate passes. A parity-valid but telemetry-invalid run remains useful for debugging only.
+"""),
+    py("""gate = results["session_gate"]
+canary = results["canary"]
+gate_rows = [{
+    "Session status": results["status"],
+    "Gate passed": gate["gate_passed"],
+    "Busy throttling (%)": gate["max_busy_throttle_pct"],
+    "Clock spread (%)": gate["clock_spread_pct"],
+    "Max temperature (C)": gate["max_temperature_c"],
+    "Canary drift (%)": canary["drift_pct"],
+}]
+display(pd.DataFrame(gate_rows).round(3).style.hide(axis="index"))
 
-They share the one-time cross-KV optimization; the principal difference is removal of per-step host tensor construction and per-token CPU synchronization through persistent CUDA-graph buffers and K=4 readback. Use burst capacity for saturation behavior and Poisson-high latency for queueing impact.
+if gate["failures"]:
+    print("Failing criteria:")
+    for failure in gate["failures"]:
+        print(" -", failure)
+else:
+    print("All telemetry criteria passed.")
 """),
 ]
 

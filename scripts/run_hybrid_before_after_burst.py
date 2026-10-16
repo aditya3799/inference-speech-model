@@ -53,6 +53,10 @@ SYSTEMS: List[Tuple[str, Dict[str, Any]]] = [
         "kind": "engine", "decode": "eager", "cache_cross_kv": False,
         "graph_decode": False, "readback_k": 1,
     }),
+    ("hybrid_cross_kv", {
+        "kind": "engine", "decode": "eager", "cache_cross_kv": True,
+        "graph_decode": False, "readback_k": 1,
+    }),
     ("hybrid_after", {
         "kind": "engine", "decode": "cuda_graph", "cache_cross_kv": True,
         "graph_decode": True, "readback_k": 4,
@@ -132,23 +136,32 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path, default=REPO_ROOT / "data" / "hybrid_before_after_burst.json")
     parser.add_argument("--matched-only", action="store_true", help="Measure only static eager/graph and hybrid before/after")
-    parser.add_argument("--include-poisson-high", action="store_true", help="Also run 100 requests at Poisson rate 4.0 req/s")
+    parser.add_argument("--include-poisson-high", action="store_true", help="Also run the configured request count at Poisson rate 4.0 req/s")
     parser.add_argument("--encoder-ablation-only", action="store_true", help="Measure static graph, graph-engine baseline, and encoder-handoff optimization")
+    parser.add_argument("--systems", type=str, help="Comma-separated system names to run")
+    parser.add_argument("--num-requests", type=int, default=100, help="Requests per traffic profile")
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
 
     session_id = f"burst_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-    if args.encoder_ablation_only:
+    if args.systems:
+        selected = {name.strip() for name in args.systems.split(",") if name.strip()}
+        known = {name for name, _ in SYSTEMS}
+        unknown = selected - known
+        if unknown:
+            raise ValueError(f"Unknown systems: {sorted(unknown)}; choose from {sorted(known)}")
+        systems = [(name, cfg) for name, cfg in SYSTEMS if name in selected]
+    elif args.encoder_ablation_only:
         selected = {"static_graph", "hybrid_after", "hybrid_encoder_optimized"}
         systems = [(name, cfg) for name, cfg in SYSTEMS if name in selected]
     else:
         systems = [(name, cfg) for name, cfg in SYSTEMS if not args.matched_only or name != "sequential"]
     bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
-    traffic_burst = generate_burst_traffic(100)
+    traffic_burst = generate_burst_traffic(args.num_requests)
     profiles = {"burst": traffic_burst}
     if args.include_poisson_high:
-        profiles["poisson_high_4_0"] = generate_poisson_traffic(100, rate=4.0, seed=42)
+        profiles["poisson_high_4_0"] = generate_poisson_traffic(args.num_requests, rate=4.0, seed=42)
     canary_n = min(20, len(bench.samples))
     canary_traffic = generate_burst_traffic(canary_n)
     reference_wer = hf_reference_wer(bench)
@@ -157,7 +170,7 @@ def main() -> int:
     print(f"\n=== Sequential canary START ({canary_n}) ===")
     canary_start = bench.run_sequential(canary_traffic)
 
-    print("\n=== 100-utterance parity gate ===")
+    print(f"\n=== {args.num_requests}-utterance parity gate ===")
     parity: Dict[str, Any] = {}
     for name, cfg in systems:
         result = run_system(bench, traffic_burst, cfg)
@@ -211,7 +224,7 @@ def main() -> int:
                 speed_row = {
                     "profile": profile_name, "repeat": repeat + 1, "order_index": order_index + 1, "status": status,
                     "wall_time_s": result["wall_time_s"],
-                    "service_capacity_req_per_sec": 100.0 / result["wall_time_s"],
+                    "service_capacity_req_per_sec": len(traffic) / result["wall_time_s"],
                     "throughput_audio_per_sec": result["throughput_audio_per_sec"],
                     "ttft_p50_s": result["ttft_p50_s"], "ttft_p95_s": result["ttft_p95_s"],
                     "latency_p50_s": result["latency_p50_s"], "latency_p95_s": result["latency_p95_s"],
@@ -256,7 +269,7 @@ def main() -> int:
         "environment": runtime_metadata(),
         "methodology": {
             "profiles": list(profiles), "poisson_rate_req_per_s": 4.0 if args.include_poisson_high else None,
-            "utterances_per_profile": 100, "repeats": args.repeats,
+            "utterances_per_profile": args.num_requests, "repeats": args.repeats,
             "batch_size": 4, "order": "cyclic rotation", "discarded_warmup_cycles_per_profile": 1,
             "graph_buckets": [64, 128, 256, 448], "graph_readback_k": 4,
         },
