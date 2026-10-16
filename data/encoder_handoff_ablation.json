@@ -1,0 +1,493 @@
+{
+  "session_id": "burst_20261016_221237_a73c93",
+  "timestamp": "2026-10-16T22:18:36.204324",
+  "status": "TELEMETRY_INVALID",
+  "environment": {
+    "os": "Windows-10-10.0.26300-SP0",
+    "driver": "551.76",
+    "python": "3.10.11",
+    "torch": "2.6.0+cu124",
+    "transformers": "4.57.0",
+    "triton": "3.8.0"
+  },
+  "methodology": {
+    "profiles": [
+      "burst"
+    ],
+    "poisson_rate_req_per_s": null,
+    "utterances_per_profile": 100,
+    "repeats": 1,
+    "batch_size": 4,
+    "order": "cyclic rotation",
+    "discarded_warmup_cycles_per_profile": 1,
+    "graph_buckets": [
+      64,
+      128,
+      256,
+      448
+    ],
+    "graph_readback_k": 4
+  },
+  "system_configs": {
+    "static_graph": {
+      "kind": "static",
+      "decode": "cuda_graph",
+      "graph_decode": true,
+      "readback_k": 4
+    },
+    "hybrid_after": {
+      "kind": "engine",
+      "decode": "cuda_graph",
+      "cache_cross_kv": true,
+      "graph_decode": true,
+      "readback_k": 4
+    },
+    "hybrid_encoder_optimized": {
+      "kind": "engine",
+      "decode": "cuda_graph",
+      "cache_cross_kv": true,
+      "graph_decode": true,
+      "readback_k": 4,
+      "batch_encoder": true,
+      "graph_direct_encoder_kv": true
+    }
+  },
+  "parity_gate": {
+    "static_graph": {
+      "status": "VALID",
+      "passed": true,
+      "exact_match_pct": 100.0,
+      "wer_pct": 5.28153644696639,
+      "reference_wer_pct": 5.28153644696639,
+      "wer_delta_points": 0.0
+    },
+    "hybrid_after": {
+      "status": "VALID",
+      "passed": true,
+      "exact_match_pct": 99.0,
+      "wer_pct": 5.28153644696639,
+      "reference_wer_pct": 5.28153644696639,
+      "wer_delta_points": 0.0
+    },
+    "hybrid_encoder_optimized": {
+      "status": "VALID",
+      "passed": true,
+      "exact_match_pct": 99.0,
+      "wer_pct": 5.28153644696639,
+      "reference_wer_pct": 5.28153644696639,
+      "wer_delta_points": 0.0
+    }
+  },
+  "canary": {
+    "utterances": 20,
+    "start_throughput_audio_per_sec": 10.073789513171373,
+    "end_throughput_audio_per_sec": 32.016827586841735,
+    "drift_pct": 217.82307487147784,
+    "passed": false
+  },
+  "session_gate": {
+    "gate_passed": false,
+    "max_temperature_c": 62.0,
+    "max_busy_throttle_pct": 100.0,
+    "system_median_busy_clocks": {
+      "static_graph": 1432.0,
+      "hybrid_after": 210.0,
+      "hybrid_encoder_optimized": 210.0
+    },
+    "clock_spread_pct": 85.33519553072625,
+    "canary_drift_pct": 217.82307487147784,
+    "failures": [
+      "Peak busy throttling ratio 100.0% exceeded 10.0%.",
+      "Cross-system busy median clock spread (85.3%) exceeds 10.0% limit (min=210 MHz, max=1432 MHz).",
+      "Sequential canary drift (217.8%) exceeds 15.0% limit."
+    ]
+  },
+  "profiles": {
+    "burst": {
+      "systems": {
+        "static_graph": {
+          "status": "VALID",
+          "wall_time_s_median": 9.56632620000164,
+          "service_capacity_req_per_sec_median": 10.453333694598754,
+          "throughput_audio_per_sec_median": 92.16495251853829,
+          "ttft_p50_s_median": 5.823858400006429,
+          "ttft_p95_s_median": 9.11995740000566,
+          "latency_p50_s_median": 6.060698500004946,
+          "latency_p95_s_median": 9.252657400007593,
+          "peak_vram_allocated_mb_median": 567.701171875,
+          "wer_pct": 5.28153644696639,
+          "exact_match_pct": 100.0,
+          "busy_median_clock_mhz": 1432.0,
+          "busy_throttle_fraction": 0.0,
+          "runs": [
+            {
+              "profile": "burst",
+              "repeat": 1,
+              "order_index": 1,
+              "status": "VALID",
+              "wall_time_s": 9.56632620000164,
+              "service_capacity_req_per_sec": 10.453333694598754,
+              "throughput_audio_per_sec": 92.16495251853829,
+              "ttft_p50_s": 5.823858400006429,
+              "ttft_p95_s": 9.11995740000566,
+              "latency_p50_s": 6.060698500004946,
+              "latency_p95_s": 9.252657400007593,
+              "peak_vram_allocated_mb": 567.701171875,
+              "exact_match_pct": 100.0,
+              "wer_pct": 5.28153644696639,
+              "telemetry_gpu": {
+                "sample_count": 19,
+                "busy_sample_count": 1,
+                "all_median_clock_mhz": 1807.0,
+                "all_min_clock_mhz": 210.0,
+                "all_max_clock_mhz": 1815.0,
+                "all_max_temp_c": 74.0,
+                "all_mean_power_w": 24.706842105263156,
+                "all_mean_utilization_pct": 32.36842105263158,
+                "all_throttle_sample_pct": 5.263157894736842,
+                "median_clock_mhz": 1432.0,
+                "min_clock_mhz": 1432.0,
+                "max_clock_mhz": 1432.0,
+                "max_temp_c": 60.0,
+                "throttle_sample_pct": 0.0,
+                "busy_median_clock_mhz": 1432.0,
+                "busy_min_clock_mhz": 1432.0,
+                "busy_max_clock_mhz": 1432.0,
+                "busy_max_temp_c": 60.0,
+                "busy_throttle_sample_pct": 0.0
+              },
+              "telemetry_cpu": {
+                "sample_count": 12,
+                "median_cpu_perf_pct": 48.8509715,
+                "min_cpu_perf_pct": 44.230976,
+                "max_cpu_perf_pct": 76.718353
+              },
+              "run_gate_passed": true,
+              "run_gate_failures": []
+            }
+          ]
+        },
+        "hybrid_after": {
+          "status": "VALID",
+          "wall_time_s_median": 41.35264599999937,
+          "service_capacity_req_per_sec_median": 2.4182249426070954,
+          "throughput_audio_per_sec_median": 21.321005673978235,
+          "ttft_p50_s_median": 12.760425250009575,
+          "ttft_p95_s_median": 38.23243839500574,
+          "latency_p50_s_median": 13.48285360000591,
+          "latency_p95_s_median": 39.44293515500976,
+          "peak_vram_allocated_mb_median": 1845.9326171875,
+          "wer_pct": 5.28153644696639,
+          "exact_match_pct": 99.0,
+          "busy_median_clock_mhz": 210.0,
+          "busy_throttle_fraction": 1.0,
+          "runs": [
+            {
+              "profile": "burst",
+              "repeat": 1,
+              "order_index": 2,
+              "status": "VALID",
+              "wall_time_s": 41.35264599999937,
+              "service_capacity_req_per_sec": 2.4182249426070954,
+              "throughput_audio_per_sec": 21.321005673978235,
+              "ttft_p50_s": 12.760425250009575,
+              "ttft_p95_s": 38.23243839500574,
+              "latency_p50_s": 13.48285360000591,
+              "latency_p95_s": 39.44293515500976,
+              "peak_vram_allocated_mb": 1845.9326171875,
+              "exact_match_pct": 99.0,
+              "wer_pct": 5.28153644696639,
+              "telemetry_gpu": {
+                "sample_count": 69,
+                "busy_sample_count": 40,
+                "all_median_clock_mhz": 210.0,
+                "all_min_clock_mhz": 210.0,
+                "all_max_clock_mhz": 1432.0,
+                "all_max_temp_c": 63.0,
+                "all_mean_power_w": 10.658695652173913,
+                "all_mean_utilization_pct": 64.69565217391305,
+                "all_throttle_sample_pct": 66.66666666666666,
+                "median_clock_mhz": 210.0,
+                "min_clock_mhz": 210.0,
+                "max_clock_mhz": 210.0,
+                "max_temp_c": 62.0,
+                "throttle_sample_pct": 100.0,
+                "busy_median_clock_mhz": 210.0,
+                "busy_min_clock_mhz": 210.0,
+                "busy_max_clock_mhz": 210.0,
+                "busy_max_temp_c": 62.0,
+                "busy_throttle_sample_pct": 100.0
+              },
+              "telemetry_cpu": {
+                "sample_count": 44,
+                "median_cpu_perf_pct": 107.607608,
+                "min_cpu_perf_pct": 12.468821,
+                "max_cpu_perf_pct": 115.507864
+              },
+              "run_gate_passed": false,
+              "run_gate_failures": [
+                "Busy sample throttling was active for 100.0% of samples (exceeds 10.0% limit)."
+              ]
+            }
+          ]
+        },
+        "hybrid_encoder_optimized": {
+          "status": "VALID",
+          "wall_time_s_median": 15.84867399999348,
+          "service_capacity_req_per_sec_median": 6.309676128112746,
+          "throughput_audio_per_sec_median": 55.63115248634445,
+          "ttft_p50_s_median": 12.933743399997184,
+          "ttft_p95_s_median": 15.510620390005352,
+          "latency_p50_s_median": 13.113196949998382,
+          "latency_p95_s_median": 15.659523145003186,
+          "peak_vram_allocated_mb_median": 708.5107421875,
+          "wer_pct": 5.28153644696639,
+          "exact_match_pct": 99.0,
+          "busy_median_clock_mhz": 210.0,
+          "busy_throttle_fraction": 1.0,
+          "runs": [
+            {
+              "profile": "burst",
+              "repeat": 1,
+              "order_index": 3,
+              "status": "VALID",
+              "wall_time_s": 15.84867399999348,
+              "service_capacity_req_per_sec": 6.309676128112746,
+              "throughput_audio_per_sec": 55.63115248634445,
+              "ttft_p50_s": 12.933743399997184,
+              "ttft_p95_s": 15.510620390005352,
+              "latency_p50_s": 13.113196949998382,
+              "latency_p95_s": 15.659523145003186,
+              "peak_vram_allocated_mb": 708.5107421875,
+              "exact_match_pct": 99.0,
+              "wer_pct": 5.28153644696639,
+              "telemetry_gpu": {
+                "sample_count": 31,
+                "busy_sample_count": 16,
+                "all_median_clock_mhz": 210.0,
+                "all_min_clock_mhz": 210.0,
+                "all_max_clock_mhz": 1815.0,
+                "all_max_temp_c": 70.0,
+                "all_mean_power_w": 15.747419354838707,
+                "all_mean_utilization_pct": 70.38709677419355,
+                "all_throttle_sample_pct": 67.74193548387096,
+                "median_clock_mhz": 210.0,
+                "min_clock_mhz": 210.0,
+                "max_clock_mhz": 315.0,
+                "max_temp_c": 59.0,
+                "throttle_sample_pct": 100.0,
+                "busy_median_clock_mhz": 210.0,
+                "busy_min_clock_mhz": 210.0,
+                "busy_max_clock_mhz": 315.0,
+                "busy_max_temp_c": 59.0,
+                "busy_throttle_sample_pct": 100.0
+              },
+              "telemetry_cpu": {
+                "sample_count": 18,
+                "median_cpu_perf_pct": 113.0647715,
+                "min_cpu_perf_pct": 24.797113,
+                "max_cpu_perf_pct": 117.947177
+              },
+              "run_gate_passed": false,
+              "run_gate_failures": [
+                "Busy sample throttling was active for 100.0% of samples (exceeds 10.0% limit)."
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "speed_rows": {
+    "static_graph": {
+      "status": "VALID",
+      "wall_time_s_median": 9.56632620000164,
+      "service_capacity_req_per_sec_median": 10.453333694598754,
+      "throughput_audio_per_sec_median": 92.16495251853829,
+      "ttft_p50_s_median": 5.823858400006429,
+      "ttft_p95_s_median": 9.11995740000566,
+      "latency_p50_s_median": 6.060698500004946,
+      "latency_p95_s_median": 9.252657400007593,
+      "peak_vram_allocated_mb_median": 567.701171875,
+      "wer_pct": 5.28153644696639,
+      "exact_match_pct": 100.0,
+      "busy_median_clock_mhz": 1432.0,
+      "busy_throttle_fraction": 0.0,
+      "runs": [
+        {
+          "profile": "burst",
+          "repeat": 1,
+          "order_index": 1,
+          "status": "VALID",
+          "wall_time_s": 9.56632620000164,
+          "service_capacity_req_per_sec": 10.453333694598754,
+          "throughput_audio_per_sec": 92.16495251853829,
+          "ttft_p50_s": 5.823858400006429,
+          "ttft_p95_s": 9.11995740000566,
+          "latency_p50_s": 6.060698500004946,
+          "latency_p95_s": 9.252657400007593,
+          "peak_vram_allocated_mb": 567.701171875,
+          "exact_match_pct": 100.0,
+          "wer_pct": 5.28153644696639,
+          "telemetry_gpu": {
+            "sample_count": 19,
+            "busy_sample_count": 1,
+            "all_median_clock_mhz": 1807.0,
+            "all_min_clock_mhz": 210.0,
+            "all_max_clock_mhz": 1815.0,
+            "all_max_temp_c": 74.0,
+            "all_mean_power_w": 24.706842105263156,
+            "all_mean_utilization_pct": 32.36842105263158,
+            "all_throttle_sample_pct": 5.263157894736842,
+            "median_clock_mhz": 1432.0,
+            "min_clock_mhz": 1432.0,
+            "max_clock_mhz": 1432.0,
+            "max_temp_c": 60.0,
+            "throttle_sample_pct": 0.0,
+            "busy_median_clock_mhz": 1432.0,
+            "busy_min_clock_mhz": 1432.0,
+            "busy_max_clock_mhz": 1432.0,
+            "busy_max_temp_c": 60.0,
+            "busy_throttle_sample_pct": 0.0
+          },
+          "telemetry_cpu": {
+            "sample_count": 12,
+            "median_cpu_perf_pct": 48.8509715,
+            "min_cpu_perf_pct": 44.230976,
+            "max_cpu_perf_pct": 76.718353
+          },
+          "run_gate_passed": true,
+          "run_gate_failures": []
+        }
+      ]
+    },
+    "hybrid_after": {
+      "status": "VALID",
+      "wall_time_s_median": 41.35264599999937,
+      "service_capacity_req_per_sec_median": 2.4182249426070954,
+      "throughput_audio_per_sec_median": 21.321005673978235,
+      "ttft_p50_s_median": 12.760425250009575,
+      "ttft_p95_s_median": 38.23243839500574,
+      "latency_p50_s_median": 13.48285360000591,
+      "latency_p95_s_median": 39.44293515500976,
+      "peak_vram_allocated_mb_median": 1845.9326171875,
+      "wer_pct": 5.28153644696639,
+      "exact_match_pct": 99.0,
+      "busy_median_clock_mhz": 210.0,
+      "busy_throttle_fraction": 1.0,
+      "runs": [
+        {
+          "profile": "burst",
+          "repeat": 1,
+          "order_index": 2,
+          "status": "VALID",
+          "wall_time_s": 41.35264599999937,
+          "service_capacity_req_per_sec": 2.4182249426070954,
+          "throughput_audio_per_sec": 21.321005673978235,
+          "ttft_p50_s": 12.760425250009575,
+          "ttft_p95_s": 38.23243839500574,
+          "latency_p50_s": 13.48285360000591,
+          "latency_p95_s": 39.44293515500976,
+          "peak_vram_allocated_mb": 1845.9326171875,
+          "exact_match_pct": 99.0,
+          "wer_pct": 5.28153644696639,
+          "telemetry_gpu": {
+            "sample_count": 69,
+            "busy_sample_count": 40,
+            "all_median_clock_mhz": 210.0,
+            "all_min_clock_mhz": 210.0,
+            "all_max_clock_mhz": 1432.0,
+            "all_max_temp_c": 63.0,
+            "all_mean_power_w": 10.658695652173913,
+            "all_mean_utilization_pct": 64.69565217391305,
+            "all_throttle_sample_pct": 66.66666666666666,
+            "median_clock_mhz": 210.0,
+            "min_clock_mhz": 210.0,
+            "max_clock_mhz": 210.0,
+            "max_temp_c": 62.0,
+            "throttle_sample_pct": 100.0,
+            "busy_median_clock_mhz": 210.0,
+            "busy_min_clock_mhz": 210.0,
+            "busy_max_clock_mhz": 210.0,
+            "busy_max_temp_c": 62.0,
+            "busy_throttle_sample_pct": 100.0
+          },
+          "telemetry_cpu": {
+            "sample_count": 44,
+            "median_cpu_perf_pct": 107.607608,
+            "min_cpu_perf_pct": 12.468821,
+            "max_cpu_perf_pct": 115.507864
+          },
+          "run_gate_passed": false,
+          "run_gate_failures": [
+            "Busy sample throttling was active for 100.0% of samples (exceeds 10.0% limit)."
+          ]
+        }
+      ]
+    },
+    "hybrid_encoder_optimized": {
+      "status": "VALID",
+      "wall_time_s_median": 15.84867399999348,
+      "service_capacity_req_per_sec_median": 6.309676128112746,
+      "throughput_audio_per_sec_median": 55.63115248634445,
+      "ttft_p50_s_median": 12.933743399997184,
+      "ttft_p95_s_median": 15.510620390005352,
+      "latency_p50_s_median": 13.113196949998382,
+      "latency_p95_s_median": 15.659523145003186,
+      "peak_vram_allocated_mb_median": 708.5107421875,
+      "wer_pct": 5.28153644696639,
+      "exact_match_pct": 99.0,
+      "busy_median_clock_mhz": 210.0,
+      "busy_throttle_fraction": 1.0,
+      "runs": [
+        {
+          "profile": "burst",
+          "repeat": 1,
+          "order_index": 3,
+          "status": "VALID",
+          "wall_time_s": 15.84867399999348,
+          "service_capacity_req_per_sec": 6.309676128112746,
+          "throughput_audio_per_sec": 55.63115248634445,
+          "ttft_p50_s": 12.933743399997184,
+          "ttft_p95_s": 15.510620390005352,
+          "latency_p50_s": 13.113196949998382,
+          "latency_p95_s": 15.659523145003186,
+          "peak_vram_allocated_mb": 708.5107421875,
+          "exact_match_pct": 99.0,
+          "wer_pct": 5.28153644696639,
+          "telemetry_gpu": {
+            "sample_count": 31,
+            "busy_sample_count": 16,
+            "all_median_clock_mhz": 210.0,
+            "all_min_clock_mhz": 210.0,
+            "all_max_clock_mhz": 1815.0,
+            "all_max_temp_c": 70.0,
+            "all_mean_power_w": 15.747419354838707,
+            "all_mean_utilization_pct": 70.38709677419355,
+            "all_throttle_sample_pct": 67.74193548387096,
+            "median_clock_mhz": 210.0,
+            "min_clock_mhz": 210.0,
+            "max_clock_mhz": 315.0,
+            "max_temp_c": 59.0,
+            "throttle_sample_pct": 100.0,
+            "busy_median_clock_mhz": 210.0,
+            "busy_min_clock_mhz": 210.0,
+            "busy_max_clock_mhz": 315.0,
+            "busy_max_temp_c": 59.0,
+            "busy_throttle_sample_pct": 100.0
+          },
+          "telemetry_cpu": {
+            "sample_count": 18,
+            "median_cpu_perf_pct": 113.0647715,
+            "min_cpu_perf_pct": 24.797113,
+            "max_cpu_perf_pct": 117.947177
+          },
+          "run_gate_passed": false,
+          "run_gate_failures": [
+            "Busy sample throttling was active for 100.0% of samples (exceeds 10.0% limit)."
+          ]
+        }
+      ]
+    }
+  }
+}

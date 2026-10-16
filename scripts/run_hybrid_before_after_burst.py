@@ -35,7 +35,7 @@ from scripts.gpu_telemetry import (
     evaluate_session_gate,
     get_max_boost_clock,
 )
-from scripts.run_interleaved_benchmark_graph import cooldown_gpu
+from scripts.run_interleaved_benchmark_final import cooldown_gpu
 from scripts.test_parity_graph import hf_reference_wer
 
 try:
@@ -57,6 +57,11 @@ SYSTEMS: List[Tuple[str, Dict[str, Any]]] = [
         "kind": "engine", "decode": "cuda_graph", "cache_cross_kv": True,
         "graph_decode": True, "readback_k": 4,
     }),
+    ("hybrid_encoder_optimized", {
+        "kind": "engine", "decode": "cuda_graph", "cache_cross_kv": True,
+        "graph_decode": True, "readback_k": 4, "batch_encoder": True,
+        "graph_direct_encoder_kv": True,
+    }),
 ]
 
 
@@ -73,7 +78,7 @@ def run_system(bench: RealSpeechBenchmark, traffic: List[Dict[str, Any]], cfg: D
         max_batch_size=4,
         retain_encoder_cache=False,
         cache_cross_kv=cfg["cache_cross_kv"],
-        batch_encoder=False,
+        batch_encoder=cfg.get("batch_encoder", False),
         no_sync_decode=False,
         avoid_redundant_cross_kv=False,
         graph_decode=cfg["graph_decode"],
@@ -81,6 +86,7 @@ def run_system(bench: RealSpeechBenchmark, traffic: List[Dict[str, Any]], cfg: D
         graph_non_blocking_copies=True,
         graph_zero_slot_buffers_on_release=False,
         graph_force_bucket=None,
+        graph_direct_encoder_kv=cfg.get("graph_direct_encoder_kv", False),
     )
 
 
@@ -127,12 +133,17 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=REPO_ROOT / "data" / "hybrid_before_after_burst.json")
     parser.add_argument("--matched-only", action="store_true", help="Measure only static eager/graph and hybrid before/after")
     parser.add_argument("--include-poisson-high", action="store_true", help="Also run 100 requests at Poisson rate 4.0 req/s")
+    parser.add_argument("--encoder-ablation-only", action="store_true", help="Measure static graph, graph-engine baseline, and encoder-handoff optimization")
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
 
     session_id = f"burst_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-    systems = [(name, cfg) for name, cfg in SYSTEMS if not args.matched_only or name != "sequential"]
+    if args.encoder_ablation_only:
+        selected = {"static_graph", "hybrid_after", "hybrid_encoder_optimized"}
+        systems = [(name, cfg) for name, cfg in SYSTEMS if name in selected]
+    else:
+        systems = [(name, cfg) for name, cfg in SYSTEMS if not args.matched_only or name != "sequential"]
     bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
     traffic_burst = generate_burst_traffic(100)
     profiles = {"burst": traffic_burst}
