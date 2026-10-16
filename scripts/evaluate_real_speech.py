@@ -572,6 +572,7 @@ class RealSpeechBenchmark:
         graph_non_blocking_copies: bool = True,
         graph_zero_slot_buffers_on_release: bool = False,
         graph_force_bucket: Optional[int] = None,
+        graph_direct_encoder_kv: bool = False,
         phase_timing: bool = False,
     ) -> Dict[str, Any]:
         """Engine (continuous batching + paged dual cache)."""
@@ -582,7 +583,7 @@ class RealSpeechBenchmark:
             num_heads=self.model.num_heads,
             head_dim=self.model.head_dim,
             block_size=16,
-            num_blocks=6144,
+            num_blocks=1 if graph_direct_encoder_kv else 6144,
             dtype=self.dtype,
             device=self.device,
         )
@@ -613,6 +614,7 @@ class RealSpeechBenchmark:
             graph_non_blocking_copies=graph_non_blocking_copies,
             graph_zero_slot_buffers_on_release=graph_zero_slot_buffers_on_release,
             graph_force_bucket=graph_force_bucket,
+            graph_direct_encoder_kv=graph_direct_encoder_kv,
             phase_timing=phase_timing,
         )
 

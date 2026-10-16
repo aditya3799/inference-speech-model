@@ -126,6 +126,8 @@ def run_all(output: Path, run_isolations: bool) -> Dict[str, Any]:
             max_batch_size=4,
             graph_decode=True,
             graph_readback_k=4,
+            batch_encoder=True,
+            graph_direct_encoder_kv=True,
         )
         report["profiles"][profile_name] = summarize(profile_name, result, reference_wer)
         output.write_text(json.dumps(report, indent=2), encoding="utf-8", newline="\n")
@@ -144,6 +146,8 @@ def run_all(output: Path, run_isolations: bool) -> Dict[str, Any]:
                 "max_batch_size": 4,
                 "graph_decode": True,
                 "graph_readback_k": 4,
+                "batch_encoder": True,
+                "graph_direct_encoder_kv": True,
             }
             options.update(overrides)
             result = bench.run_engine(burst, **options)

@@ -807,11 +807,22 @@ class TestSpeechServingEngine(unittest.TestCase):
         # 2. Graph
         enc_bm_g = EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
         dec_bm_g = BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
-        sched_graph = PhaseAwareSpeechScheduler(model, DualCacheManager(enc_bm_g, dec_bm_g), max_batch_size=4, device=self.device, graph_decode=True, graph_readback_k=1)
+        sched_graph = PhaseAwareSpeechScheduler(
+            model,
+            DualCacheManager(enc_bm_g, dec_bm_g),
+            max_batch_size=4,
+            device=self.device,
+            graph_decode=True,
+            graph_readback_k=1,
+            graph_direct_encoder_kv=True,
+        )
         sched_graph.submit(mel, prompt_token_ids=prompt, max_new_tokens=10)
         graph_tokens = sched_graph.run_until_done()[0].generated_tokens
 
         self.assertEqual(eager_tokens, graph_tokens)
+        self.assertEqual(enc_bm_g.allocated_block_count, 0)
+        self.assertIsNone(sched_graph.graph_buffers.cross_cache)
+        self.assertIsNotNone(sched_graph.graph_buffers.g_cross_kv)
         print(f">>> graph_decode parity PASSED: {eager_tokens} == {graph_tokens}")
 
     def test_graph_decode_zero_leaked_blocks(self):

@@ -225,17 +225,19 @@ class GraphDecodeBuffers:
         # -------------------------------------------------------------
         # Static Cross-KV Buffer (per slot, filled at handoff)
         # -------------------------------------------------------------
-        self.cross_cache = DynamicCache()
-        for l in range(self.num_decoder_layers):
-            ck = torch.zeros((max_slots, self.num_heads, max_enc_len, self.head_dim), device=device, dtype=dtype)
-            cv = torch.zeros((max_slots, self.num_heads, max_enc_len, self.head_dim), device=device, dtype=dtype)
-            self.cross_cache.update(ck, cv, layer_idx=l)
-
-        # Also store cross_kv tensors for native WhisperClassSpeechEncoderDecoderModel
-        self.g_cross_kv = torch.zeros(
-            (max_slots, self.num_decoder_layers, 2, self.num_heads, max_enc_len, self.head_dim),
-            device=device, dtype=dtype
-        )
+        self.cross_cache: Optional[DynamicCache] = None
+        self.g_cross_kv: Optional[torch.Tensor] = None
+        if self.is_pretrained_whisper:
+            self.cross_cache = DynamicCache()
+            for l in range(self.num_decoder_layers):
+                ck = torch.zeros((max_slots, self.num_heads, max_enc_len, self.head_dim), device=device, dtype=dtype)
+                cv = torch.zeros((max_slots, self.num_heads, max_enc_len, self.head_dim), device=device, dtype=dtype)
+                self.cross_cache.update(ck, cv, layer_idx=l)
+        else:
+            self.g_cross_kv = torch.zeros(
+                (max_slots, self.num_decoder_layers, 2, self.num_heads, max_enc_len, self.head_dim),
+                device=device, dtype=dtype
+            )
 
         # -------------------------------------------------------------
         # Static Self-KV Caches & Buffers per Bucket
@@ -245,28 +247,27 @@ class GraphDecodeBuffers:
         self.g_self_kv_native: Dict[int, torch.Tensor] = {}
 
         for b in SELF_KV_BUCKETS:
-            sc = StaticBucketSelfCache(
-                batch_size=max_slots,
-                num_heads=self.num_heads,
-                bucket_len=b,
-                head_dim=self.head_dim,
-                num_layers=self.num_decoder_layers,
-                pos_tensor=self.g_positions,
-                device=device,
-                dtype=dtype,
-            )
-            self.self_caches[b] = sc
-
-            edc = EncoderDecoderCache(sc, self.cross_cache)
-            for l in range(len(self.cross_cache.layers)):
-                edc.is_updated[l] = True
-            self.enc_dec_caches[b] = edc
-
-            # For native model: [B, num_layers, 2, num_heads, bucket, head_dim]
-            self.g_self_kv_native[b] = torch.zeros(
-                (max_slots, self.num_decoder_layers, 2, self.num_heads, b, self.head_dim),
-                device=device, dtype=dtype
-            )
+            if self.is_pretrained_whisper:
+                sc = StaticBucketSelfCache(
+                    batch_size=max_slots,
+                    num_heads=self.num_heads,
+                    bucket_len=b,
+                    head_dim=self.head_dim,
+                    num_layers=self.num_decoder_layers,
+                    pos_tensor=self.g_positions,
+                    device=device,
+                    dtype=dtype,
+                )
+                self.self_caches[b] = sc
+                edc = EncoderDecoderCache(sc, self.cross_cache)
+                for l in range(len(self.cross_cache.layers)):
+                    edc.is_updated[l] = True
+                self.enc_dec_caches[b] = edc
+            else:
+                self.g_self_kv_native[b] = torch.zeros(
+                    (max_slots, self.num_decoder_layers, 2, self.num_heads, b, self.head_dim),
+                    device=device, dtype=dtype
+                )
 
         # -------------------------------------------------------------
         # CUDA Graph Captures
@@ -318,17 +319,21 @@ class GraphDecodeBuffers:
             ck, cv = enc_kv_layers[l]
             # ck shape: [1, num_heads, enc_len, head_dim]
             c_len = min(ck.shape[2], self.max_enc_len)
-            self.cross_cache.layers[l].keys[slot_idx, :, :c_len, :].copy_(ck[0, :, :c_len, :])
-            self.cross_cache.layers[l].values[slot_idx, :, :c_len, :].copy_(cv[0, :, :c_len, :])
-            self.g_cross_kv[slot_idx, l, 0, :, :c_len, :].copy_(ck[0, :, :c_len, :])
-            self.g_cross_kv[slot_idx, l, 1, :, :c_len, :].copy_(cv[0, :, :c_len, :])
+            if self.is_pretrained_whisper:
+                self.cross_cache.layers[l].keys[slot_idx, :, :c_len, :].copy_(ck[0, :, :c_len, :])
+                self.cross_cache.layers[l].values[slot_idx, :, :c_len, :].copy_(cv[0, :, :c_len, :])
+            else:
+                self.g_cross_kv[slot_idx, l, 0, :, :c_len, :].copy_(ck[0, :, :c_len, :])
+                self.g_cross_kv[slot_idx, l, 1, :, :c_len, :].copy_(cv[0, :, :c_len, :])
 
         # Zero self-KV buffers for slot_idx to prevent any stale state from prior requests
         for b in SELF_KV_BUCKETS:
             for l in range(self.num_decoder_layers):
-                self.self_caches[b].layers[l].keys[slot_idx].zero_()
-                self.self_caches[b].layers[l].values[slot_idx].zero_()
-                self.g_self_kv_native[b][slot_idx, l].zero_()
+                if self.is_pretrained_whisper:
+                    self.self_caches[b].layers[l].keys[slot_idx].zero_()
+                    self.self_caches[b].layers[l].values[slot_idx].zero_()
+                else:
+                    self.g_self_kv_native[b][slot_idx, l].zero_()
 
         # Copy initial self-KV into all bucket buffers for slot_idx
         if initial_self_kv is not None:
@@ -338,10 +343,12 @@ class GraphDecodeBuffers:
                 s_len = min(sk.shape[2], prompt_len)
                 for b in SELF_KV_BUCKETS:
                     if s_len <= b:
-                        self.self_caches[b].layers[l].keys[slot_idx, :, :s_len, :].copy_(sk[0, :, :s_len, :])
-                        self.self_caches[b].layers[l].values[slot_idx, :, :s_len, :].copy_(sv[0, :, :s_len, :])
-                        self.g_self_kv_native[b][slot_idx, l, 0, :, :s_len, :].copy_(sk[0, :, :s_len, :])
-                        self.g_self_kv_native[b][slot_idx, l, 1, :, :s_len, :].copy_(sv[0, :, :s_len, :])
+                        if self.is_pretrained_whisper:
+                            self.self_caches[b].layers[l].keys[slot_idx, :, :s_len, :].copy_(sk[0, :, :s_len, :])
+                            self.self_caches[b].layers[l].values[slot_idx, :, :s_len, :].copy_(sv[0, :, :s_len, :])
+                        else:
+                            self.g_self_kv_native[b][slot_idx, l, 0, :, :s_len, :].copy_(sk[0, :, :s_len, :])
+                            self.g_self_kv_native[b][slot_idx, l, 1, :, :s_len, :].copy_(sv[0, :, :s_len, :])
 
         return slot_idx
 
@@ -358,13 +365,17 @@ class GraphDecodeBuffers:
         if self.zero_slot_buffers_on_release:
             for b in SELF_KV_BUCKETS:
                 for l in range(self.num_decoder_layers):
-                    self.self_caches[b].layers[l].keys[slot_idx].zero_()
-                    self.self_caches[b].layers[l].values[slot_idx].zero_()
-                    self.g_self_kv_native[b][slot_idx, l].zero_()
+                    if self.is_pretrained_whisper:
+                        self.self_caches[b].layers[l].keys[slot_idx].zero_()
+                        self.self_caches[b].layers[l].values[slot_idx].zero_()
+                    else:
+                        self.g_self_kv_native[b][slot_idx, l].zero_()
             for l in range(self.num_decoder_layers):
-                self.cross_cache.layers[l].keys[slot_idx].zero_()
-                self.cross_cache.layers[l].values[slot_idx].zero_()
-                self.g_cross_kv[slot_idx, l].zero_()
+                if self.is_pretrained_whisper:
+                    self.cross_cache.layers[l].keys[slot_idx].zero_()
+                    self.cross_cache.layers[l].values[slot_idx].zero_()
+                else:
+                    self.g_cross_kv[slot_idx, l].zero_()
 
     def find_free_slot(self) -> Optional[int]:
         for s in self.slots:
@@ -412,10 +423,12 @@ class GraphDecodeBuffers:
 
         # Clean all self-KV buffers after capture warmup so initial serving sees zeroed buffers
         for b in SELF_KV_BUCKETS:
-            self.g_self_kv_native[b].zero_()
-            for l in range(self.num_decoder_layers):
-                self.self_caches[b].layers[l].keys.zero_()
-                self.self_caches[b].layers[l].values.zero_()
+            if self.is_pretrained_whisper:
+                for l in range(self.num_decoder_layers):
+                    self.self_caches[b].layers[l].keys.zero_()
+                    self.self_caches[b].layers[l].values.zero_()
+            else:
+                self.g_self_kv_native[b].zero_()
 
     def _forward_step(self, bucket: int) -> None:
         """Execute one decode step on the static buffers."""
@@ -474,15 +487,16 @@ class GraphDecodeBuffers:
                 cur_len = s.decoder_seq_len
                 for l in range(self.num_decoder_layers):
                     # Copy from old bucket to new bucket
-                    old_k = self.self_caches[old_b].layers[l].keys[s.slot_idx, :, :cur_len, :]
-                    old_v = self.self_caches[old_b].layers[l].values[s.slot_idx, :, :cur_len, :]
-                    self.self_caches[bucket].layers[l].keys[s.slot_idx, :, :cur_len, :].copy_(old_k)
-                    self.self_caches[bucket].layers[l].values[s.slot_idx, :, :cur_len, :].copy_(old_v)
-
-                    old_k_n = self.g_self_kv_native[old_b][s.slot_idx, l, 0, :, :cur_len, :]
-                    old_v_n = self.g_self_kv_native[old_b][s.slot_idx, l, 1, :, :cur_len, :]
-                    self.g_self_kv_native[bucket][s.slot_idx, l, 0, :, :cur_len, :].copy_(old_k_n)
-                    self.g_self_kv_native[bucket][s.slot_idx, l, 1, :, :cur_len, :].copy_(old_v_n)
+                    if self.is_pretrained_whisper:
+                        old_k = self.self_caches[old_b].layers[l].keys[s.slot_idx, :, :cur_len, :]
+                        old_v = self.self_caches[old_b].layers[l].values[s.slot_idx, :, :cur_len, :]
+                        self.self_caches[bucket].layers[l].keys[s.slot_idx, :, :cur_len, :].copy_(old_k)
+                        self.self_caches[bucket].layers[l].values[s.slot_idx, :, :cur_len, :].copy_(old_v)
+                    else:
+                        old_k = self.g_self_kv_native[old_b][s.slot_idx, l, 0, :, :cur_len, :]
+                        old_v = self.g_self_kv_native[old_b][s.slot_idx, l, 1, :, :cur_len, :]
+                        self.g_self_kv_native[bucket][s.slot_idx, l, 0, :, :cur_len, :].copy_(old_k)
+                        self.g_self_kv_native[bucket][s.slot_idx, l, 1, :, :cur_len, :].copy_(old_v)
                 s.bucket = bucket
 
         bank_idx = self._step_counter % self._input_ring_size

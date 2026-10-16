@@ -148,6 +148,7 @@ class PhaseAwareSpeechScheduler:
         graph_non_blocking_copies: bool = True,
         graph_zero_slot_buffers_on_release: bool = False,
         graph_force_bucket: Optional[int] = None,
+        graph_direct_encoder_kv: bool = False,
         phase_timing: bool = False,
     ):
         self.model = model
@@ -166,6 +167,9 @@ class PhaseAwareSpeechScheduler:
         self.avoid_redundant_cross_kv = avoid_redundant_cross_kv
         self.graph_decode = graph_decode
         self.graph_readback_k = graph_readback_k
+        self.graph_direct_encoder_kv = bool(graph_direct_encoder_kv)
+        if self.graph_direct_encoder_kv and (not self.graph_decode or self.retain_encoder_cache):
+            raise ValueError("graph_direct_encoder_kv requires graph_decode=True and retain_encoder_cache=False")
         self.phase_timing = bool(phase_timing)
         self.phase_timer = PhaseTimer(self.phase_timing, device=self.device)
         self.graph_buffers: Optional[GraphDecodeBuffers] = None
@@ -246,10 +250,10 @@ class PhaseAwareSpeechScheduler:
         mel_len = mel_features.shape[-1] if mel_features.dim() > 1 else mel_features.shape[0]
         # Speech Conv2 stride 2 downsampling: enc_seq_len = (mel_len + 1) // 2
         req_enc_seq_len = (mel_len + 1) // 2
-        req_enc_blocks = 0 if is_hit else ((req_enc_seq_len + enc_block_size - 1) // enc_block_size)
+        req_enc_blocks = 0 if is_hit or self.graph_direct_encoder_kv else ((req_enc_seq_len + enc_block_size - 1) // enc_block_size)
         req_dec_blocks = (max_new_tokens + dec_block_size - 1) // dec_block_size
 
-        queued_enc_blocks = sum(
+        queued_enc_blocks = 0 if self.graph_direct_encoder_kv else sum(
             0 if (self.retain_encoder_cache and r.full_input_hash and r.full_input_hash in self._full_input_enc_cache)
             else (((r.mel_features.shape[-1] + 1) // 2) + enc_block_size - 1) // enc_block_size
             for r in self.queue
@@ -410,7 +414,7 @@ class PhaseAwareSpeechScheduler:
                 cand = self.queue[0]
                 est_seq = (cand.mel_features.shape[-1] + 1) // 2
                 needed = (est_seq + enc_block_size - 1) // enc_block_size
-                if self.dual_cache.encoder_bm.num_free_blocks < total_needed + needed:
+                if not self.graph_direct_encoder_kv and self.dual_cache.encoder_bm.num_free_blocks < total_needed + needed:
                     break
                 r_pop = self.queue.pop(0)
                 r_pop.start_time = time.perf_counter()
@@ -474,7 +478,7 @@ class PhaseAwareSpeechScheduler:
             cache_hit = (full_hash in self._full_input_enc_cache) if self.retain_encoder_cache else False
 
             # On a hit we need blocks already allocated; no new blocks required.
-            blocks_needed_for_admission = 0 if cache_hit else needed_enc_blocks
+            blocks_needed_for_admission = 0 if cache_hit or self.graph_direct_encoder_kv else needed_enc_blocks
 
             # Check capacity before dequeuing
             if self.dual_cache.encoder_bm.num_free_blocks < blocks_needed_for_admission:
@@ -567,48 +571,57 @@ class PhaseAwareSpeechScheduler:
         enc_seq_len = encoder_hidden.shape[1]
         req.encoder_seq_len = enc_seq_len
 
-        # Allocate encoder blocks
+        # Direct graph handoff keeps the encoder projections contiguous and
+        # copies them once into the graph slot after prefill. The paged encoder
+        # pool remains the source of truth for eager/cached configurations.
+        direct_graph_handoff = self.graph_direct_encoder_kv
         real_needed = (enc_seq_len + enc_block_size - 1) // enc_block_size
         enc_block_table = []
-        with self.phase_timer.measure([req], "block_allocate"):
-            with record_function("scheduler_bookkeeping"):
-                for _ in range(real_needed):
-                    blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
-                    enc_block_table.append(blk_id)
-                req.encoder_block_table = enc_block_table
+        if not direct_graph_handoff:
+            with self.phase_timer.measure([req], "block_allocate"):
+                with record_function("scheduler_bookkeeping"):
+                    for _ in range(real_needed):
+                        blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
+                        enc_block_table.append(blk_id)
+                    req.encoder_block_table = enc_block_table
 
         # Write encoder KV into fresh blocks ONLY
-        with self.phase_timer.measure([req], "cross_kv_pool_copy"):
-            with record_function("scheduler_bookkeeping"):
-                num_enc_layers = len(encoder_kv_list)
-                for l in range(num_enc_layers):
-                    k = encoder_kv_list[l][0][0]
-                    v = encoder_kv_list[l][1][0]
-                    for blk_idx_in_req, blk_id in enumerate(enc_block_table):
-                        assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
-                            f"Attempted to write into shared block {blk_id} "
-                            f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
-                        )
-                        start_t = blk_idx_in_req * enc_block_size
-                        end_t = min(start_t + enc_block_size, enc_seq_len)
-                        tok_count = end_t - start_t
-                        k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
-                        v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
-                        self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
+        if not direct_graph_handoff:
+            with self.phase_timer.measure([req], "cross_kv_pool_copy"):
+                with record_function("scheduler_bookkeeping"):
+                    num_enc_layers = len(encoder_kv_list)
+                    for l in range(num_enc_layers):
+                        k = encoder_kv_list[l][0][0]
+                        v = encoder_kv_list[l][1][0]
+                        for blk_idx_in_req, blk_id in enumerate(enc_block_table):
+                            assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
+                                f"Attempted to write into shared block {blk_id} "
+                                f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
+                            )
+                            start_t = blk_idx_in_req * enc_block_size
+                            end_t = min(start_t + enc_block_size, enc_seq_len)
+                            tok_count = end_t - start_t
+                            k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
+                            v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
+                            self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
 
         # Gather enc KV for this request (done once at handoff)
-        with self.phase_timer.measure([req], "cross_kv_contiguous_or_graph_copy"):
-            with record_function("cross_kv_gather"):
-                enc_kv_layers = []
-                for l in range(num_enc_layers):
-                    gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
-                    gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
-                    flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                    flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                    ck = flat_k.permute(1, 0, 2).unsqueeze(0)
-                    cv = flat_v.permute(1, 0, 2).unsqueeze(0)
-                    enc_kv_layers.append((ck, cv))
-                req.cached_encoder_kv = enc_kv_layers
+        if direct_graph_handoff:
+            enc_kv_layers = encoder_kv_list
+            req.cached_encoder_kv = enc_kv_layers
+        else:
+            with self.phase_timer.measure([req], "cross_kv_contiguous_or_graph_copy"):
+                with record_function("cross_kv_gather"):
+                    enc_kv_layers = []
+                    for l in range(num_enc_layers):
+                        gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
+                        gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
+                        flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                        flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                        ck = flat_k.permute(1, 0, 2).unsqueeze(0)
+                        cv = flat_v.permute(1, 0, 2).unsqueeze(0)
+                        enc_kv_layers.append((ck, cv))
+                    req.cached_encoder_kv = enc_kv_layers
 
         if self.retain_encoder_cache and full_hash:
             for blk_id in enc_block_table:
