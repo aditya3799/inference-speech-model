@@ -779,7 +779,162 @@ class TestSpeechServingEngine(unittest.TestCase):
         self.assertEqual(sched.encoder_calls_skipped, 1)
         print(f">>> cache_cross_kv cache hit PASSED: Encoder skipped on hit (calls={sched.encoder_calls}, skipped={sched.encoder_calls_skipped}).")
 
+    def test_graph_decode_parity(self):
+        """Step 3 Test (1): Token-for-token parity between eager and graph decode."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available for CUDA graph decode test")
+        print("\n--- Running Test: graph_decode parity ---")
+        torch.manual_seed(42)
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=64,
+            num_heads=4,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        mel = torch.randn(80, 200, device=self.device, dtype=self.dtype)
+        prompt = torch.tensor([[1, 2]], device=self.device, dtype=torch.long)
+
+        # 1. Eager
+        enc_bm_e = EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dec_bm_e = BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        sched_eager = PhaseAwareSpeechScheduler(model, DualCacheManager(enc_bm_e, dec_bm_e), max_batch_size=4, device=self.device, graph_decode=False)
+        sched_eager.submit(mel, prompt_token_ids=prompt, max_new_tokens=10)
+        eager_tokens = sched_eager.run_until_done()[0].generated_tokens
+
+        # 2. Graph
+        enc_bm_g = EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dec_bm_g = BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        sched_graph = PhaseAwareSpeechScheduler(model, DualCacheManager(enc_bm_g, dec_bm_g), max_batch_size=4, device=self.device, graph_decode=True, graph_readback_k=1)
+        sched_graph.submit(mel, prompt_token_ids=prompt, max_new_tokens=10)
+        graph_tokens = sched_graph.run_until_done()[0].generated_tokens
+
+        self.assertEqual(eager_tokens, graph_tokens)
+        print(f">>> graph_decode parity PASSED: {eager_tokens} == {graph_tokens}")
+
+    def test_graph_decode_zero_leaked_blocks(self):
+        """Step 3 Test (2): Zero leaked blocks after requests complete in graph_decode mode."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available for CUDA graph decode test")
+        print("\n--- Running Test: graph_decode zero leaked blocks ---")
+        torch.manual_seed(101)
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=64,
+            num_heads=4,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        enc_bm = EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dual = DualCacheManager(enc_bm, dec_bm)
+        sched = PhaseAwareSpeechScheduler(model, dual, max_batch_size=4, device=self.device, graph_decode=True)
+
+        for i in range(3):
+            mel = torch.randn(80, 160 + i * 20, device=self.device, dtype=self.dtype)
+            sched.submit(mel, prompt_token_ids=torch.tensor([[1, 2]], device=self.device), max_new_tokens=8)
+        sched.run_until_done()
+
+        self.assertEqual(dec_bm.num_free_blocks, 64)
+        self.assertEqual(enc_bm.num_free_blocks, 64)
+        self.assertEqual(sched.graph_buffers.active_slot_count(), 0)
+        print(">>> graph_decode zero block leaks PASSED: all blocks and slots freed.")
+
+    def test_graph_decode_slots_reused_different_lengths(self):
+        """Step 3 Test (3): Slots reused correctly across requests of different lengths."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available for CUDA graph decode test")
+        print("\n--- Running Test: graph_decode slot reuse across varied lengths ---")
+        torch.manual_seed(202)
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=64,
+            num_heads=4,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        enc_bm = EncoderBlockManager(2, 4, 16, 16, 128, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(2, 4, 16, 16, 128, dtype=self.dtype, device=self.device)
+        dual = DualCacheManager(enc_bm, dec_bm)
+        sched = PhaseAwareSpeechScheduler(model, dual, max_batch_size=4, device=self.device, graph_decode=True)
+
+        # Submit 6 requests of varied lengths to saturate and cycle 4 slots
+        lengths = [5, 15, 8, 20, 6, 12]
+        for idx, l in enumerate(lengths):
+            mel = torch.randn(80, 100 + idx * 30, device=self.device, dtype=self.dtype)
+            sched.submit(mel, prompt_token_ids=torch.tensor([[1, 2]], device=self.device), max_new_tokens=l)
+
+        completed = sched.run_until_done()
+        self.assertEqual(len(completed), 6)
+        for req in completed:
+            self.assertLessEqual(len(req.generated_tokens), req.max_new_tokens)
+        self.assertEqual(dec_bm.num_free_blocks, 128)
+        self.assertEqual(enc_bm.num_free_blocks, 128)
+        self.assertEqual(sched.graph_buffers.active_slot_count(), 0)
+        print(">>> graph_decode slot reuse across varied lengths PASSED.")
+
+    def test_graph_decode_eos_handling(self):
+        """Step 3 Test (4): Generation stops immediately on EOS and trims tokens after EOS."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available for CUDA graph decode test")
+        print("\n--- Running Test: graph_decode EOS handling ---")
+        torch.manual_seed(303)
+        model = WhisperClassSpeechEncoderDecoderModel(
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            hidden_dim=64,
+            num_heads=4,
+            mel_dim=80,
+            vocab_size=100,
+        ).to(device=self.device, dtype=self.dtype).eval()
+
+        enc_bm = EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dec_bm = BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        dual = DualCacheManager(enc_bm, dec_bm)
+        sched = PhaseAwareSpeechScheduler(model, dual, max_batch_size=4, device=self.device, graph_decode=True)
+
+        # Run eager first to discover which token is generated
+        sched_e = PhaseAwareSpeechScheduler(model, DualCacheManager(
+            EncoderBlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device),
+            BlockManager(2, 4, 16, 16, 64, dtype=self.dtype, device=self.device)
+        ), max_batch_size=4, device=self.device, graph_decode=False)
+        mel = torch.randn(80, 200, device=self.device, dtype=self.dtype)
+        sched_e.submit(mel, prompt_token_ids=torch.tensor([[1, 2]], device=self.device), max_new_tokens=6)
+        e_toks = sched_e.run_until_done()[0].generated_tokens
+        eos_tok = e_toks[2]  # choose the 3rd generated token as EOS
+
+        # Submit with eos_token_id set to that token
+        sched.submit(mel, prompt_token_ids=torch.tensor([[1, 2]], device=self.device), max_new_tokens=10, eos_token_id=eos_tok)
+        comp = sched.run_until_done()
+        g_toks = comp[0].generated_tokens
+
+        # EOS should stop generation at index 2 (length 2 tokens before EOS)
+        self.assertEqual(len(g_toks), 2)
+        self.assertEqual(g_toks, e_toks[:2])
+        self.assertNotIn(eos_tok, g_toks)
+        self.assertEqual(dec_bm.num_free_blocks, 64)
+        print(f">>> graph_decode EOS handling PASSED: stopped at EOS token {eos_tok}, kept {g_toks}.")
+    def test_engine_graph_serving_parity_100(self):
+        """Gate engine_graph on all 100 utterances under burst and Poisson(4.0)."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available for 100-utterance serving parity")
+        import tempfile
+        from pathlib import Path
+        from scripts.test_parity_graph import run_all
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report = run_all(Path(tmp_dir) / "serving_parity_graph.json", run_isolations=False)
+        self.assertTrue(report["gate_passed"], report["profiles"])
+        for profile in report["profiles"].values():
+            self.assertGreaterEqual(profile["exact_match_pct"], 99.0)
+            self.assertLessEqual(abs(profile["wer_delta_points"]), 0.2)
+
 
 if __name__ == "__main__":
     unittest.main()
-

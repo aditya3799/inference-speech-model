@@ -44,6 +44,8 @@ from transformers.cache_utils import DynamicCache, DynamicLayer
 from .models import WhisperClassSpeechEncoderDecoderModel
 from .dual_cache_manager import DualCacheManager
 from .memory_guard import MemoryGuard, logger
+from .graph_decode_buffers import GraphDecodeBuffers, MAX_SLOTS, DEFAULT_READBACK_K
+from .phase_timing import PhaseTimer
 
 
 WHISPER_SOT_TOKEN_ID = 50258
@@ -95,6 +97,11 @@ class DualCacheRequest:
     generated_count: int = 0
     last_token_id: Optional[int] = None
     done: bool = False
+    slot_idx: Optional[int] = None
+    graph_slot_idx: Optional[int] = None
+    graph_slot_reused: bool = False
+    graph_token_trace: List[Dict[str, int]] = field(default_factory=list)
+    graph_extra_slot_steps: int = 0
 
     # Cached encoder KV tensors — materialized once at encode time, reused every decode step.
     # List of (K, V) per encoder layer: K/V shape = [1, num_heads, enc_seq_len, head_dim]
@@ -112,6 +119,7 @@ class DualCacheRequest:
     encode_done_time: Optional[float] = None
     first_token_time: Optional[float] = None
     finish_time: Optional[float] = None
+    phase_timing: Optional[Dict[str, Any]] = None
 
 
 class PhaseAwareSpeechScheduler:
@@ -135,6 +143,12 @@ class PhaseAwareSpeechScheduler:
         batch_encoder: bool = False,
         no_sync_decode: bool = False,
         avoid_redundant_cross_kv: bool = False,
+        graph_decode: bool = False,
+        graph_readback_k: int = DEFAULT_READBACK_K,
+        graph_non_blocking_copies: bool = True,
+        graph_zero_slot_buffers_on_release: bool = False,
+        graph_force_bucket: Optional[int] = None,
+        phase_timing: bool = False,
     ):
         self.model = model
         self.dual_cache = dual_cache_manager
@@ -150,6 +164,24 @@ class PhaseAwareSpeechScheduler:
         self.batch_encoder = batch_encoder
         self.no_sync_decode = no_sync_decode
         self.avoid_redundant_cross_kv = avoid_redundant_cross_kv
+        self.graph_decode = graph_decode
+        self.graph_readback_k = graph_readback_k
+        self.phase_timing = bool(phase_timing)
+        self.phase_timer = PhaseTimer(self.phase_timing, device=self.device)
+        self.graph_buffers: Optional[GraphDecodeBuffers] = None
+        if self.graph_decode:
+            self.max_batch_size = min(self.max_batch_size, MAX_SLOTS)
+            dt = getattr(self.dual_cache.decoder_bm, "dtype", torch.float16)
+            self.graph_buffers = GraphDecodeBuffers(
+                model=self.model,
+                device=self.device,
+                dtype=dt,
+                max_slots=self.max_batch_size,
+                readback_k=self.graph_readback_k,
+                non_blocking_copies=graph_non_blocking_copies,
+                zero_slot_buffers_on_release=graph_zero_slot_buffers_on_release,
+                force_bucket=graph_force_bucket,
+            )
 
         self.queue: List[DualCacheRequest] = []
         self.active_encode: List[DualCacheRequest] = []
@@ -386,6 +418,9 @@ class PhaseAwareSpeechScheduler:
                 if ref_arr is not None:
                     r_pop.queue_wait_time = r_pop.start_time - ref_arr
                     self.queue_wait_times.append(r_pop.queue_wait_time)
+                    self.phase_timer.add([r_pop], "queue_admission_wait", r_pop.queue_wait_time * 1000.0, 0.0)
+                if self.phase_timing:
+                    self.phase_timer.ensure(r_pop)["encoder_batched"] = True
                 r_pop.phase = RequestPhase.ENCODE_PHASE
                 batch_reqs.append(r_pop)
                 total_needed += needed
@@ -398,9 +433,10 @@ class PhaseAwareSpeechScheduler:
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 t_enc_start = time.perf_counter()
-                with record_function("encoder_forward"):
-                    with torch.no_grad():
-                        b_hidden, b_kv_list = self.model.encode(b_mels)
+                with self.phase_timer.measure(batch_reqs, "encoder_forward"):
+                    with record_function("encoder_forward"):
+                        with torch.no_grad():
+                            b_hidden, b_kv_list = self.model.encode(b_mels)
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 t_enc_end = time.perf_counter()
@@ -455,6 +491,9 @@ class PhaseAwareSpeechScheduler:
             if ref_arrival is not None:
                 req.queue_wait_time = req.start_time - ref_arrival
                 self.queue_wait_times.append(req.queue_wait_time)
+                self.phase_timer.add([req], "queue_admission_wait", req.queue_wait_time * 1000.0, 0.0)
+            if self.phase_timing:
+                self.phase_timer.ensure(req)["encoder_batched"] = False
             req.phase = RequestPhase.ENCODE_PHASE
 
             try:
@@ -500,9 +539,10 @@ class PhaseAwareSpeechScheduler:
                     if torch.cuda.is_available():
                         torch.cuda.synchronize()
                     t_enc_start = time.perf_counter()
-                    with record_function("encoder_forward"):
-                        with torch.no_grad():
-                            encoder_hidden, encoder_kv_list = self.model.encode(mel_in)
+                    with self.phase_timer.measure([req], "encoder_forward"):
+                        with record_function("encoder_forward"):
+                            with torch.no_grad():
+                                encoder_hidden, encoder_kv_list = self.model.encode(mel_in)
                     if torch.cuda.is_available():
                         torch.cuda.synchronize()
                     t_enc_end = time.perf_counter()
@@ -530,41 +570,45 @@ class PhaseAwareSpeechScheduler:
         # Allocate encoder blocks
         real_needed = (enc_seq_len + enc_block_size - 1) // enc_block_size
         enc_block_table = []
-        with record_function("scheduler_bookkeeping"):
-            for _ in range(real_needed):
-                blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
-                enc_block_table.append(blk_id)
-            req.encoder_block_table = enc_block_table
+        with self.phase_timer.measure([req], "block_allocate"):
+            with record_function("scheduler_bookkeeping"):
+                for _ in range(real_needed):
+                    blk_id, _ = self.dual_cache.encoder_bm.allocate_block(content_hash=None)
+                    enc_block_table.append(blk_id)
+                req.encoder_block_table = enc_block_table
 
-            # Write encoder KV into fresh blocks ONLY
-            num_enc_layers = len(encoder_kv_list)
-            for l in range(num_enc_layers):
-                k = encoder_kv_list[l][0][0]
-                v = encoder_kv_list[l][1][0]
-                for blk_idx_in_req, blk_id in enumerate(enc_block_table):
-                    assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
-                        f"Attempted to write into shared block {blk_id} "
-                        f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
-                    )
-                    start_t = blk_idx_in_req * enc_block_size
-                    end_t = min(start_t + enc_block_size, enc_seq_len)
-                    tok_count = end_t - start_t
-                    k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
-                    v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
-                    self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
+        # Write encoder KV into fresh blocks ONLY
+        with self.phase_timer.measure([req], "cross_kv_pool_copy"):
+            with record_function("scheduler_bookkeeping"):
+                num_enc_layers = len(encoder_kv_list)
+                for l in range(num_enc_layers):
+                    k = encoder_kv_list[l][0][0]
+                    v = encoder_kv_list[l][1][0]
+                    for blk_idx_in_req, blk_id in enumerate(enc_block_table):
+                        assert self.dual_cache.encoder_bm.ref_counts[blk_id] == 1, (
+                            f"Attempted to write into shared block {blk_id} "
+                            f"(ref_count={self.dual_cache.encoder_bm.ref_counts[blk_id]})"
+                        )
+                        start_t = blk_idx_in_req * enc_block_size
+                        end_t = min(start_t + enc_block_size, enc_seq_len)
+                        tok_count = end_t - start_t
+                        k_slice = k[:, start_t:end_t, :].permute(1, 0, 2)
+                        v_slice = v[:, start_t:end_t, :].permute(1, 0, 2)
+                        self.dual_cache.encoder_bm.store_encoder_kv(blk_id, l, k_slice, v_slice)
 
         # Gather enc KV for this request (done once at handoff)
-        with record_function("cross_kv_gather"):
-            enc_kv_layers = []
-            for l in range(num_enc_layers):
-                gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
-                gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
-                flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
-                ck = flat_k.permute(1, 0, 2).unsqueeze(0)
-                cv = flat_v.permute(1, 0, 2).unsqueeze(0)
-                enc_kv_layers.append((ck, cv))
-            req.cached_encoder_kv = enc_kv_layers
+        with self.phase_timer.measure([req], "cross_kv_contiguous_or_graph_copy"):
+            with record_function("cross_kv_gather"):
+                enc_kv_layers = []
+                for l in range(num_enc_layers):
+                    gathered_k = self.dual_cache.encoder_bm.key_pool[l][enc_block_table]
+                    gathered_v = self.dual_cache.encoder_bm.value_pool[l][enc_block_table]
+                    flat_k = gathered_k.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                    flat_v = gathered_v.view(-1, self.dual_cache.encoder_bm.num_heads, self.dual_cache.encoder_bm.head_dim)[:enc_seq_len]
+                    ck = flat_k.permute(1, 0, 2).unsqueeze(0)
+                    cv = flat_v.permute(1, 0, 2).unsqueeze(0)
+                    enc_kv_layers.append((ck, cv))
+                req.cached_encoder_kv = enc_kv_layers
 
         if self.retain_encoder_cache and full_hash:
             for blk_id in enc_block_table:
@@ -594,17 +638,23 @@ class PhaseAwareSpeechScheduler:
 
         prompt_len = req.prompt_token_ids.shape[1]
         req.decoder_seq_len = prompt_len
-        needed_dec_blocks = (prompt_len + self.dual_cache.decoder_bm.block_size - 1) // self.dual_cache.decoder_bm.block_size
-        with record_function("scheduler_bookkeeping"):
-            for _ in range(needed_dec_blocks):
-                req.decoder_block_table.append(self.dual_cache.allocate_decoder_block())
+        if self.graph_decode:
+            total_dec_len = prompt_len + req.max_new_tokens
+            needed_dec_blocks = (total_dec_len + self.dual_cache.decoder_bm.block_size - 1) // self.dual_cache.decoder_bm.block_size
+        else:
+            needed_dec_blocks = (prompt_len + self.dual_cache.decoder_bm.block_size - 1) // self.dual_cache.decoder_bm.block_size
+        with self.phase_timer.measure([req], "block_allocate"):
+            with record_function("scheduler_bookkeeping"):
+                for _ in range(needed_dec_blocks):
+                    req.decoder_block_table.append(self.dual_cache.allocate_decoder_block())
 
-        with torch.no_grad():
-            dec_out = self.model.decode_step(
-                input_ids=req.prompt_token_ids,
-                encoder_past_kv_list=enc_kv_layers,
-                use_cache=True
-            )
+        with self.phase_timer.measure([req], "prefill"):
+            with torch.no_grad():
+                dec_out = self.model.decode_step(
+                    input_ids=req.prompt_token_ids,
+                    encoder_past_kv_list=enc_kv_layers,
+                    use_cache=True
+                )
 
         with record_function("scheduler_bookkeeping"):
             req.cached_decoder_kv = [
@@ -617,6 +667,8 @@ class PhaseAwareSpeechScheduler:
                 dv = dec_out.past_key_values.layers[l].values
                 for blk_idx_in_req, blk_id in enumerate(req.decoder_block_table):
                     start_t = blk_idx_in_req * self.dual_cache.decoder_bm.block_size
+                    if start_t >= prompt_len:
+                        break
                     end_t = min(start_t + self.dual_cache.decoder_bm.block_size, prompt_len)
                     tok_count = end_t - start_t
                     dk_slice = dk[0, :, start_t:end_t, :].permute(1, 0, 2)
@@ -636,15 +688,80 @@ class PhaseAwareSpeechScheduler:
             self._complete_request(req, status=RequestPhase.COMPLETED)
         else:
             self.active_decode.append(req)
+            if self.graph_decode:
+                with self.phase_timer.measure([req], "cross_kv_contiguous_or_graph_copy"):
+                    slot_idx = self.graph_buffers.assign_slot(
+                        req=req,
+                        enc_kv_layers=enc_kv_layers,
+                        prompt_len=prompt_len,
+                        initial_tok=next_tok,
+                        initial_self_kv=req.cached_decoder_kv,
+                    )
+                req.slot_idx = slot_idx
+                req.graph_slot_idx = slot_idx
+                req.graph_slot_reused = self.graph_buffers.slots[slot_idx].reused
             if self.avoid_redundant_cross_kv:
                 req.cached_encoder_kv = None
             self._cached_batch_key = None
             self._cached_enc_mask = None
 
 
+    def _process_decode_phase_graph(self):
+        """Execute one decode step across active decode slots using CUDA graph replay."""
+        if not self.active_decode:
+            return
+
+        active_at_start = list(self.active_decode)
+        with self.phase_timer.measure(active_at_start, "host_between_replays"):
+            bucket = self.graph_buffers.prepare_replay()
+        with self.phase_timer.measure(active_at_start, "graph_replay"):
+            with record_function("graph_decode_step"):
+                self.graph_buffers.replay_step(bucket)
+
+        if self.graph_buffers.should_readback():
+            with self.phase_timer.measure(active_at_start, "readback_wait"):
+                results = self.graph_buffers.sync_tokens()
+            completed_in_step = []
+            with self.phase_timer.measure(active_at_start, "host_between_replays"):
+                for slot, tokens in results:
+                    req = slot.req
+                    for token_offset, (tok, trace) in enumerate(zip(tokens, slot.last_readback_trace)):
+                        if req.done:
+                            break
+                        req.graph_token_trace.append({
+                            "token_index": len(req.generated_tokens),
+                            "bucket": trace["bucket"],
+                            "readback_position": trace["readback_position"],
+                        })
+                        req.last_token_id = tok
+                        req.generated_tokens.append(tok)
+                        req.generated_count = len(req.generated_tokens)
+                        req.decoder_seq_len = req.prompt_token_ids.shape[1] + req.generated_count
+
+                        is_eos = (req.eos_token_id is not None and tok == req.eos_token_id)
+                        if is_eos or req.generated_count >= req.max_new_tokens:
+                            req.graph_extra_slot_steps = len(tokens) - token_offset - 1
+                            if self.phase_timing:
+                                self.phase_timer.ensure(req)["slot_hold_steps_after_eos"] = req.graph_extra_slot_steps
+                            if is_eos and req.eos_token_id in req.generated_tokens:
+                                eos_pos = req.generated_tokens.index(req.eos_token_id)
+                                req.generated_tokens = req.generated_tokens[:eos_pos]
+                            self.graph_buffers.release_slot(slot.slot_idx)
+                            req.slot_idx = None
+                            self._complete_request(req, status=RequestPhase.COMPLETED)
+                            completed_in_step.append(req)
+                            break
+
+            if completed_in_step:
+                self.active_decode = [r for r in self.active_decode if r not in completed_in_step]
+
     def _process_decode_phase(self):
         """Execute one vectorized decode step across active decode requests in parallel."""
         if not self.active_decode:
+            return
+
+        if self.graph_decode:
+            self._process_decode_phase_graph()
             return
 
         # 1. Allocate decoder blocks for any requests crossing block boundaries
@@ -922,21 +1039,26 @@ class PhaseAwareSpeechScheduler:
         req.done = True
         req.finish_time = time.perf_counter()
 
-        try:
-            # 1. Immediate decoder block release
-            if req.decoder_block_table:
-                self.dual_cache.decoder_bm.free_blocks(req.decoder_block_table)
-                req.decoder_block_table = []
+        if self.graph_decode and getattr(req, "slot_idx", None) is not None:
+            self.graph_buffers.release_slot(req.slot_idx)
+            req.slot_idx = None
 
-            # 2. Encoder block release or LRU cache retention
-            if req.encoder_block_table:
-                self.dual_cache.encoder_bm.release_blocks(req.encoder_block_table)
-                # If retain_encoder_cache is False, remove cache entry when no active requests reference its blocks
-                if not self.retain_encoder_cache and req.full_input_hash in self._full_input_enc_cache:
-                    cached_entry = self._full_input_enc_cache[req.full_input_hash]
-                    if all(self.dual_cache.encoder_bm.ref_counts[b] == 0 for b in cached_entry["block_table"]):
-                        self._full_input_enc_cache.pop(req.full_input_hash, None)
-                req.encoder_block_table = []
+        try:
+            with self.phase_timer.measure([req], "block_release"):
+                # 1. Immediate decoder block release
+                if req.decoder_block_table:
+                    self.dual_cache.decoder_bm.free_blocks(req.decoder_block_table)
+                    req.decoder_block_table = []
+
+                # 2. Encoder block release or LRU cache retention
+                if req.encoder_block_table:
+                    self.dual_cache.encoder_bm.release_blocks(req.encoder_block_table)
+                    # If retain_encoder_cache is False, remove cache entry when no active requests reference its blocks
+                    if not self.retain_encoder_cache and req.full_input_hash in self._full_input_enc_cache:
+                        cached_entry = self._full_input_enc_cache[req.full_input_hash]
+                        if all(self.dual_cache.encoder_bm.ref_counts[b] == 0 for b in cached_entry["block_table"]):
+                            self._full_input_enc_cache.pop(req.full_input_hash, None)
+                    req.encoder_block_table = []
         finally:
             req.cached_decoder_kv = None
             req.cached_encoder_kv = None
@@ -1106,5 +1228,3 @@ class PhaseAwareSpeechScheduler:
                 self.dual_cache.encoder_bm.release_blocks(entry["block_table"])
         self._full_input_enc_cache.clear()
         return count
-
-

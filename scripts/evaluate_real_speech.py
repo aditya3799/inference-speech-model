@@ -320,12 +320,34 @@ class RealSpeechBenchmark:
         metrics["concurrency_stats"] = "not measured"
         return metrics
 
-    def run_static_batching(self, traffic: List[Dict[str, Any]], batch_size: int = 4, max_new_tokens: int = 150) -> Dict[str, Any]:
+    def run_static_batching(
+        self,
+        traffic: List[Dict[str, Any]],
+        batch_size: int = 4,
+        max_new_tokens: int = 150,
+        graph_decode: bool = False,
+        graph_readback_k: int = 4,
+        phase_timing: bool = False,
+    ) -> Dict[str, Any]:
         """System 2: Static batching (fixed batch size, padded decode, waits for slowest)."""
         torch.cuda.reset_peak_memory_stats()
         t_bench_start = sync_time()
         queue = sorted(traffic, key=lambda x: x["arrival_time"])
         per_request = []
+
+        from speech_serving.phase_timing import PhaseTimer, finalize_phases, new_phase_record
+        phase_timer = PhaseTimer(phase_timing, device=self.device)
+        batch_wall_times_ms = []
+        buf = None
+        if graph_decode:
+            from speech_serving.graph_decode_buffers import GraphDecodeBuffers
+            buf = GraphDecodeBuffers(
+                model=self.model,
+                device=self.device,
+                dtype=self.dtype,
+                max_slots=batch_size,
+                readback_k=graph_readback_k,
+            )
 
         q_idx = 0
         while q_idx < len(queue):
@@ -347,56 +369,156 @@ class RealSpeechBenchmark:
 
             bsz = len(batch_reqs)
             t_batch_start = sync_time()
+            request_phase_records = [new_phase_record() for _ in batch_reqs] if phase_timing else [None] * bsz
+            if phase_timing:
+                for req_meta, phase_record in zip(batch_reqs, request_phase_records):
+                    phase_record["encoder_batched"] = bsz > 1
+                    queue_ms = max(0.0, t_batch_start - (t_bench_start + req_meta["arrival_time"])) * 1000.0
+                    phase_timer.add([phase_record], "queue_admission_wait", queue_ms, 0.0)
 
             # 1. Encode batch
             b_mels = torch.stack([self.samples[r["sample_idx"]]["mel"] for r in batch_reqs], dim=0).to(self.device)
-            with torch.no_grad():
-                enc_out, enc_kv = self.model.encode(b_mels)
+            with phase_timer.measure(request_phase_records, "encoder_forward"):
+                with torch.no_grad():
+                    enc_out, enc_kv = self.model.encode(b_mels)
 
             # 2. Prefill
             prompt = torch.tensor([WHISPER_DEFAULT_PREFIX_TOKENS] * bsz, device=self.device, dtype=torch.long)
-            with torch.no_grad():
-                dec_out = self.model.decode_step(
-                    input_ids=prompt,
-                    encoder_past_kv_list=enc_kv,
-                    use_cache=True,
-                )
+            with phase_timer.measure(request_phase_records, "prefill"):
+                with torch.no_grad():
+                    dec_out = self.model.decode_step(
+                        input_ids=prompt,
+                        encoder_past_kv_list=enc_kv,
+                        use_cache=True,
+                    )
             t_first_tok = sync_time()
             next_tokens = torch.argmax(dec_out.logits[:, -1, :], dim=-1).tolist()
             req_gen_tokens = [[tok] for tok in next_tokens]
             req_dones = [tok == WHISPER_EOS_TOKEN_ID for tok in next_tokens]
             req_finish_times = [t_first_tok if d else None for d in req_dones]
 
-            # 3. Synchronous batch decode loop (waits for all requests to finish)
-            curr_cache = dec_out.past_key_values
-            step = 1
-            while not all(req_dones) and step < max_new_tokens:
-                step += 1
-                tok_in = torch.tensor([[tok] for tok in next_tokens], device=self.device, dtype=torch.long)
-                with torch.no_grad():
-                    dec_out = self.model.decode_step(
-                        input_ids=tok_in,
-                        past_key_values=curr_cache,
-                        encoder_past_kv_list=enc_kv,
-                        use_cache=True,
-                    )
-                next_tokens = torch.argmax(dec_out.logits[:, -1, :], dim=-1).tolist()
-                t_step = sync_time()
-                for i in range(bsz):
-                    if not req_dones[i]:
-                        req_gen_tokens[i].append(next_tokens[i])
-                        if next_tokens[i] == WHISPER_EOS_TOKEN_ID or step >= max_new_tokens:
-                            req_dones[i] = True
-                            req_finish_times[i] = t_step
+            if not graph_decode:
+                # 3. Synchronous batch decode loop (waits for all requests to finish)
                 curr_cache = dec_out.past_key_values
+                step = 1
+                while not all(req_dones) and step < max_new_tokens:
+                    step += 1
+                    tok_in = torch.tensor([[tok] for tok in next_tokens], device=self.device, dtype=torch.long)
+                    with torch.no_grad():
+                        dec_out = self.model.decode_step(
+                            input_ids=tok_in,
+                            past_key_values=curr_cache,
+                            encoder_past_kv_list=enc_kv,
+                            use_cache=True,
+                        )
+                    next_tokens = torch.argmax(dec_out.logits[:, -1, :], dim=-1).tolist()
+                    t_step = sync_time()
+                    for i in range(bsz):
+                        if not req_dones[i]:
+                            req_gen_tokens[i].append(next_tokens[i])
+                            if next_tokens[i] == WHISPER_EOS_TOKEN_ID or step >= max_new_tokens:
+                                req_dones[i] = True
+                                req_finish_times[i] = t_step
+                    curr_cache = dec_out.past_key_values
+            else:
+                # 3. CUDA graph batch decode loop using identical graph machinery
+                with phase_timer.measure(request_phase_records, "cross_kv_contiguous_or_graph_copy"):
+                    for i in range(bsz):
+                        dummy_req = type("StaticReq", (), {
+                            "id": batch_reqs[i]["req_id"],
+                            "max_new_tokens": max_new_tokens,
+                            "eos_token_id": WHISPER_EOS_TOKEN_ID,
+                            "done": False,
+                        })()
+                        enc_kv_i = [(enc_kv[l][0][i:i+1], enc_kv[l][1][i:i+1]) for l in range(len(enc_kv))]
+                        init_self_kv_i = [
+                            (dec_out.past_key_values.layers[l].keys[i:i+1], dec_out.past_key_values.layers[l].values[i:i+1])
+                            for l in range(len(dec_out.past_key_values.layers))
+                        ]
+                        buf.assign_slot(
+                            req=dummy_req,
+                            enc_kv_layers=enc_kv_i,
+                            prompt_len=prompt.shape[1],
+                            initial_tok=next_tokens[i],
+                            initial_self_kv=init_self_kv_i,
+                        )
+
+                step = 1
+                eos_seen_step = [step if done else None for done in req_dones]
+                while not all(req_dones) and step < max_new_tokens:
+                    step += 1
+                    active_records = [request_phase_records[i] for i in range(bsz) if not req_dones[i]]
+                    with phase_timer.measure(active_records, "host_between_replays"):
+                        bucket = buf.prepare_replay()
+                    with phase_timer.measure(active_records, "graph_replay"):
+                        buf.replay_step(bucket)
+                    if buf.should_readback():
+                        with phase_timer.measure(active_records, "readback_wait"):
+                            sync_res = buf.sync_tokens()
+                        t_step = sync_time()
+                        with phase_timer.measure(active_records, "host_between_replays"):
+                            for slot, toks in sync_res:
+                                idx = slot.slot_idx
+                                if idx < bsz:
+                                    for token_offset, tok in enumerate(toks):
+                                        if req_dones[idx]:
+                                            break
+                                        req_gen_tokens[idx].append(tok)
+                                        if tok == WHISPER_EOS_TOKEN_ID or len(req_gen_tokens[idx]) >= max_new_tokens:
+                                            req_dones[idx] = True
+                                            req_finish_times[idx] = t_step
+                                            eos_seen_step[idx] = step - (len(toks) - token_offset - 1)
+                                            break
+
+                if buf._step_in_k > 0:
+                    active_records = [request_phase_records[i] for i in range(bsz) if not req_dones[i]]
+                    with phase_timer.measure(active_records, "readback_wait"):
+                        sync_res = buf.sync_tokens()
+                    t_step = sync_time()
+                    with phase_timer.measure(active_records, "host_between_replays"):
+                        for slot, toks in sync_res:
+                            idx = slot.slot_idx
+                            if idx < bsz:
+                                for token_offset, tok in enumerate(toks):
+                                    if req_dones[idx]:
+                                        break
+                                    req_gen_tokens[idx].append(tok)
+                                    if tok == WHISPER_EOS_TOKEN_ID or len(req_gen_tokens[idx]) >= max_new_tokens:
+                                        req_dones[idx] = True
+                                        req_finish_times[idx] = t_step
+                                        eos_seen_step[idx] = step - (len(toks) - token_offset - 1)
+                                        break
+
+                if phase_timing:
+                    for i, phase_record in enumerate(request_phase_records):
+                        seen = eos_seen_step[i]
+                        phase_record["slot_hold_steps_after_eos"] = max(0, step - seen) if seen is not None else 0
+
+                for i in range(bsz):
+                    buf.release_slot(i)
+
+                # Discard tokens generated after EOS to ensure exact parity
+                for i in range(bsz):
+                    if WHISPER_EOS_TOKEN_ID in req_gen_tokens[i]:
+                        eos_pos = req_gen_tokens[i].index(WHISPER_EOS_TOKEN_ID)
+                        req_gen_tokens[i] = req_gen_tokens[i][:eos_pos]
 
             # In static batching, all batch slots are held until the entire batch finishes
             t_batch_finish = sync_time()
+            batch_wall_times_ms.append((t_batch_finish - t_batch_start) * 1000.0)
             for i, r in enumerate(batch_reqs):
                 s_data = self.samples[r["sample_idx"]]
                 arr_time = r["arrival_time"]
                 # Finish time is when batch finishes
                 fin_time = t_batch_finish
+                if phase_timing:
+                    service_ms = (t_batch_finish - t_batch_start) * 1000.0
+                    measured_ms = sum(
+                        value["wall_ms"] for key, value in request_phase_records[i]["phases"].items()
+                        if key != "queue_admission_wait" and isinstance(value, dict)
+                    )
+                    phase_timer.add([request_phase_records[i]], "other_host_between_requests", max(0.0, service_ms - measured_ms), 0.0)
+                    finalize_phases(request_phase_records[i])
                 per_request.append({
                     "req_id": r["req_id"],
                     "sample_id": s_data["id"],
@@ -410,6 +532,7 @@ class RealSpeechBenchmark:
                     "duration": s_data["duration"],
                     "norm_ref": s_data["norm_ref"],
                     "hf_tokens": s_data["hf_tokens"],
+                    "phase_timing": request_phase_records[i] if phase_timing else "not measured",
                 })
 
         t_bench_end = sync_time()
@@ -422,6 +545,7 @@ class RealSpeechBenchmark:
         metrics = self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
         metrics["peak_actually_used_mb"] = "not measured"
         metrics["concurrency_stats"] = "not measured"
+        metrics["batch_wall_times_ms"] = batch_wall_times_ms if phase_timing else "not measured"
         return metrics
 
     def run_engine(
@@ -434,6 +558,12 @@ class RealSpeechBenchmark:
         batch_encoder: bool = False,
         no_sync_decode: bool = False,
         avoid_redundant_cross_kv: bool = False,
+        graph_decode: bool = False,
+        graph_readback_k: int = 4,
+        graph_non_blocking_copies: bool = True,
+        graph_zero_slot_buffers_on_release: bool = False,
+        graph_force_bucket: Optional[int] = None,
+        phase_timing: bool = False,
     ) -> Dict[str, Any]:
         """Engine (continuous batching + paged dual cache)."""
         torch.cuda.reset_peak_memory_stats()
@@ -469,6 +599,12 @@ class RealSpeechBenchmark:
             eos_token_id=WHISPER_EOS_TOKEN_ID,
             max_cached_encoder_inputs=100,
             device=self.device,
+            graph_decode=graph_decode,
+            graph_readback_k=graph_readback_k,
+            graph_non_blocking_copies=graph_non_blocking_copies,
+            graph_zero_slot_buffers_on_release=graph_zero_slot_buffers_on_release,
+            graph_force_bucket=graph_force_bucket,
+            phase_timing=phase_timing,
         )
 
         t_bench_start = sync_time()
@@ -527,7 +663,24 @@ class RealSpeechBenchmark:
                 "duration": s_data["duration"],
                 "norm_ref": s_data["norm_ref"],
                 "hf_tokens": s_data["hf_tokens"],
+                "slot_id": r_comp.graph_slot_idx,
+                "slot_reused": r_comp.graph_slot_reused,
+                "graph_token_trace": r_comp.graph_token_trace,
+                "graph_extra_slot_steps": r_comp.graph_extra_slot_steps,
+                "phase_timing": r_comp.phase_timing if phase_timing else "not measured",
             })
+
+        if phase_timing:
+            from speech_serving.phase_timing import finalize_phases
+            for request in per_request:
+                record = request["phase_timing"]
+                service_ms = max(0.0, request["finish_time"] - request["start_time"]) * 1000.0
+                measured_ms = sum(
+                    value["wall_ms"] for key, value in record["phases"].items()
+                    if key != "queue_admission_wait" and isinstance(value, dict)
+                )
+                scheduler.phase_timer.add([record], "other_host_between_requests", max(0.0, service_ms - measured_ms), 0.0)
+                finalize_phases(record)
 
         metrics = self._compute_metrics(per_request, wall_time, peak_alloc, peak_res)
         metrics["encoder_telemetry"] = {
@@ -538,6 +691,7 @@ class RealSpeechBenchmark:
         concurrency_stats = scheduler.get_concurrency_stats()
         metrics["concurrency_stats"] = concurrency_stats
         metrics["peak_actually_used_mb"] = concurrency_stats["peak_actually_used_mb"]
+        metrics["batch_wall_times_ms"] = "not measured"
         del scheduler, cache_mgr, enc_bm, dec_bm
         gc.collect()
         torch.cuda.empty_cache()

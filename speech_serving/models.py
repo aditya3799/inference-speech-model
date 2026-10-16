@@ -422,6 +422,70 @@ class WhisperClassSpeechEncoderDecoderModel(nn.Module):
 
         return ModelOutput(logits, out_cache if use_cache else None)
 
+    def decode_step_graph_fixed(
+        self,
+        g_token_ids: torch.Tensor,
+        g_positions: torch.Tensor,
+        g_self_kv: torch.Tensor,
+        g_cross_kv: torch.Tensor,
+        g_output_tokens: torch.Tensor,
+        bucket: int,
+        max_slots: int,
+        g_attn_mask: Optional[torch.Tensor] = None,
+        g_cross_mask: Optional[torch.Tensor] = None,
+    ) -> None:
+        """
+        Graph-capturable decode step with fully static shapes. All inputs/outputs are
+        pre-allocated GPU tensors. Designed to be called inside torch.cuda.graph() capture.
+        """
+        x = self.decoder_embed(g_token_ids).to(dtype=self.decoder_norm.weight.dtype)
+
+        for l, layer in enumerate(self.decoder_layers):
+            normed = layer.norm1(x)
+            q = layer.self_attn_q(normed).view(max_slots, 1, layer.num_heads, layer.head_dim).transpose(1, 2)
+            new_k = layer.self_attn_k(normed).view(max_slots, 1, layer.num_heads, layer.head_dim).transpose(1, 2)
+            new_v = layer.self_attn_v(normed).view(max_slots, 1, layer.num_heads, layer.head_dim).transpose(1, 2)
+
+            pos_idx = g_positions.view(max_slots, 1, 1, 1).expand(
+                max_slots, layer.num_heads, 1, layer.head_dim
+            ).clamp(0, bucket - 1)
+
+            g_self_kv[:, l, 0].scatter_(2, pos_idx, new_k)  # write K
+            g_self_kv[:, l, 1].scatter_(2, pos_idx, new_v)  # write V
+
+            full_k = g_self_kv[:, l, 0]  # [B, H, bucket, D]
+            full_v = g_self_kv[:, l, 1]
+
+            scale = 1.0 / (layer.head_dim ** 0.5)
+            attn_w = torch.matmul(q, full_k.transpose(-2, -1)) * scale  # [B, H, 1, bucket]
+            if g_attn_mask is not None:
+                attn_w = attn_w + g_attn_mask
+            attn_p = torch.softmax(attn_w, dim=-1)
+            self_out = torch.matmul(attn_p, full_v)  # [B, H, 1, D]
+            self_out = self_out.transpose(1, 2).reshape(max_slots, 1, -1)
+            x = x + layer.self_attn_out(self_out)
+
+            # ---- Cross-attention with static encoder KV ----
+            normed_x = layer.norm2(x)
+            cq = layer.cross_attn_q(normed_x).view(max_slots, 1, layer.num_heads, layer.head_dim).transpose(1, 2)
+            enc_k = g_cross_kv[:, l, 0].to(dtype=cq.dtype)  # [B, H, enc_seq_len, D]
+            enc_v = g_cross_kv[:, l, 1].to(dtype=cq.dtype)
+            cross_w = torch.matmul(cq, enc_k.transpose(-2, -1)) * scale
+            if g_cross_mask is not None:
+                cross_w = cross_w + g_cross_mask
+            cross_p = torch.softmax(cross_w, dim=-1)
+            cross_out = torch.matmul(cross_p, enc_v)
+            cross_out = cross_out.transpose(1, 2).reshape(max_slots, 1, -1)
+            x = x + layer.cross_attn_out(cross_out)
+
+            # ---- MLP ----
+            norm_layer = layer.norm3 if hasattr(layer, 'norm3') else layer.norm2
+            x = x + layer.mlp(norm_layer(x))
+
+        x = self.decoder_norm(x)
+        logits = self.lm_head(x[:, -1, :])  # [B, vocab_size]
+        g_output_tokens.copy_(torch.argmax(logits, dim=-1))
+
 
 class PretrainedWhisperModel(nn.Module):
     """

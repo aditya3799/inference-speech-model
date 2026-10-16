@@ -12,6 +12,7 @@ torch==2.6.0+cu124
 torchvision==0.21.0+cu124
 torchaudio==2.6.0+cu124
 transformers==4.57.0
+triton==3.8.0
 tokenizers==0.22.1
 numpy==1.26.4
 jiwer==4.0.0
