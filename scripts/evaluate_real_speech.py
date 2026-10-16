@@ -190,10 +190,18 @@ def sync_time() -> float:
 
 
 class RealSpeechBenchmark:
-    def __init__(self, device: str = "cuda", dtype: torch.dtype = torch.float16):
+    def __init__(
+        self,
+        device: str = "cuda",
+        dtype: torch.dtype = torch.float16,
+        local_files_only: bool = False,
+    ):
         self.device = device
         self.dtype = dtype
-        self.processor = WhisperProcessor.from_pretrained("openai/whisper-base")
+        self.processor = WhisperProcessor.from_pretrained(
+            "openai/whisper-base",
+            local_files_only=local_files_only,
+        )
         self.normalizer = self.processor.tokenizer.normalize
 
         print("Initializing PretrainedWhisperModel...")
@@ -201,6 +209,7 @@ class RealSpeechBenchmark:
             model_name_or_path="openai/whisper-base",
             device=device,
             dtype=dtype,
+            local_files_only=local_files_only,
         )
 
         # Precompute HF greedy reference tokens for all 100 samples

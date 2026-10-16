@@ -104,7 +104,11 @@ def run_all(output: Path, run_isolations: bool) -> Dict[str, Any]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for engine_graph serving parity")
 
-    bench = RealSpeechBenchmark(device="cuda", dtype=torch.float16)
+    bench = RealSpeechBenchmark(
+        device="cuda",
+        dtype=torch.float16,
+        local_files_only=True,
+    )
     reference_wer = hf_reference_wer(bench)
     burst = generate_burst_traffic(100)
     poisson = generate_poisson_traffic(100, rate=4.0, seed=42)

@@ -502,6 +502,7 @@ class PretrainedWhisperModel(nn.Module):
         model_name_or_path: str = "openai/whisper-base",
         device: str = "cuda",
         dtype: torch.dtype = torch.float16,
+        local_files_only: bool = False,
     ):
         if isinstance(dtype, str):
             dtype = getattr(torch, dtype)
@@ -512,6 +513,7 @@ class PretrainedWhisperModel(nn.Module):
             model_name_or_path,
             dtype=dtype,
             low_cpu_mem_usage=True,
+            local_files_only=local_files_only,
         ).to(device).eval()
         self.config = self.hf_model.config
         self.num_encoder_layers = self.config.encoder_layers
